@@ -109,14 +109,36 @@ jobs:
                           sp.set(W('after'), '0')
                           return spacer
 
+                      def is_hr(p):
+                          pPr = p.find(W('pPr'))
+                          if pPr is None:
+                              return False
+                          # Inline border
+                          if pPr.find(W('pBdr')) is not None:
+                              return True
+                          # Style-based horizontal rule
+                          pStyle = pPr.find(W('pStyle'))
+                          if pStyle is not None and pStyle.get(W('val'), '').lower() in ('horizontalrule', 'horizontal rule'):
+                              return True
+                          return False
+
+                      def is_bold_subheading(p):
+                          runs = p.findall(W('r'))
+                          if not runs:
+                              return False
+                          for r in runs:
+                              rPr = r.find(W('rPr'))
+                              if rPr is None or rPr.find(W('b')) is None:
+                                  return False
+                          return True
+
                       for i, child in reversed(list(enumerate(body))):
                           if child.tag == W('tbl'):
                               body.insert(i, make_spacer())       # before table
                               body.insert(i + 2, make_spacer())   # after table
                           elif child.tag == W('p'):
-                              pPr = child.find(W('pPr'))
-                              if pPr is not None and pPr.find(W('pBdr')) is not None:
-                                  body.insert(i, make_spacer())   # before horizontal rule
+                              if is_hr(child) or is_bold_subheading(child):
+                                  body.insert(i, make_spacer())
 
                       # 3. Tables: full width (autofit) + black borders + cell padding
                       for tbl in root.iter(W('tbl')):
@@ -147,13 +169,10 @@ jobs:
                       for p in root.iter(W('p')):
                           if p.getparent().tag == W('body') or p.getparent().tag == W('tc'):
                               pPr = get_or_create(p, 'pPr')
-                              pBdr = pPr.find(W('pBdr'))
-                              if pBdr is not None:
-                                  # Horizontal rule — add breathing room
+                              if is_hr(p):
                                   replace_child(pPr, etree.fromstring(
                                       f'<w:spacing xmlns:w="{ns}" w:before="480" w:after="480"/>'))
                               else:
-                                  # Justify all regular paragraphs
                                   replace_child(pPr, etree.fromstring(
                                       f'<w:jc xmlns:w="{ns}" w:val="both"/>'))
 
