@@ -56,6 +56,12 @@ jobs:
       - name: Install Python dependencies
         run: pip install google-auth google-api-python-client lxml
 
+      - name: Upload DOCX artifact for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: output-docx
+          path: output.docx
+
       - name: Strip bookmarks from DOCX
         run: |
           python3 << 'EOF'
