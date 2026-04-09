@@ -79,6 +79,23 @@ jobs:
                       root = etree.fromstring(data)
                       for el in root.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
                           el.getparent().remove(el)
+                      # Add black borders to all tables
+                      border_xml = lambda: etree.fromstring(f'''
+                        <w:tcBorders xmlns:w="{ns}">
+                          <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                          <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                          <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                          <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                        </w:tcBorders>''')
+                      for tc in root.iter(f'{{{ns}}}tc'):
+                          tcp = tc.find(f'{{{ns}}}tcPr')
+                          if tcp is None:
+                              tcp = etree.SubElement(tc, f'{{{ns}}}tcPr')
+                              tc.insert(0, tcp)
+                          existing = tcp.find(f'{{{ns}}}tcBorders')
+                          if existing is not None:
+                              tcp.remove(existing)
+                          tcp.append(border_xml())
                       data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
                   zout.writestr(item, data)
 
