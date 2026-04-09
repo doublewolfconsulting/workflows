@@ -99,13 +99,13 @@ jobs:
                       for el in root.iter(W('bookmarkStart'), W('bookmarkEnd')):
                           el.getparent().remove(el)
 
-                      # 2. Insert empty paragraph after each table
+                      # 2. Insert actual empty paragraph between every body element
                       def make_spacer():
                           spacer = etree.Element(W('p'))
                           pPr = etree.SubElement(spacer, W('pPr'))
                           sp = etree.SubElement(pPr, W('spacing'))
                           sp.set(W('before'), '0')
-                          sp.set(W('after'), '160')
+                          sp.set(W('after'), '0')
                           return spacer
 
                       def is_hr(p):
@@ -119,9 +119,13 @@ jobs:
                               return True
                           return False
 
-                      for i, child in reversed(list(enumerate(body))):
-                          if child.tag == W('tbl'):
-                              body.insert(i + 1, make_spacer())
+                      children = list(body)
+                      for i, child in reversed(list(enumerate(children))):
+                          # Insert spacer after every element except the last sectPr
+                          if child.tag != W('sectPr') and i < len(children) - 1:
+                              next_el = children[i + 1]
+                              if next_el.tag != W('sectPr'):
+                                  body.insert(i + 1, make_spacer())
 
                       # 3. Tables: full width (autofit) + black borders + cell padding
                       for tbl in root.iter(W('tbl')):
@@ -155,11 +159,10 @@ jobs:
                               pPr = get_or_create(p, 'pPr')
                               if is_hr(p):
                                   replace_child(pPr, etree.fromstring(
-                                      f'<w:spacing xmlns:w="{ns}" w:before="480" w:after="480"/>'))
+                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="0"/>'))
                               else:
-                                  # Preserve spacing from blank lines in markdown
                                   replace_child(pPr, etree.fromstring(
-                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="160"/>'))
+                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="0"/>'))
                                   replace_child(pPr, etree.fromstring(
                                       f'<w:jc xmlns:w="{ns}" w:val="both"/>'))
 
