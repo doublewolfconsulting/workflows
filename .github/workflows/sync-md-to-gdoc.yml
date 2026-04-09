@@ -62,13 +62,29 @@ jobs:
           name: output-docx
           path: output.docx
 
-      - name: Strip bookmarks from DOCX
+      - name: Post-process DOCX
         run: |
           python3 << 'EOF'
           import zipfile, shutil
           from lxml import etree
 
           ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+          W = lambda tag: f'{{{ns}}}{tag}'
+
+          def get_or_create(parent, tag, insert_pos=0):
+              el = parent.find(W(tag))
+              if el is None:
+                  el = etree.SubElement(parent, W(tag))
+                  parent.insert(insert_pos, el)
+              return el
+
+          def replace_child(parent, new_el):
+              tag = new_el.tag
+              old = parent.find(tag)
+              if old is not None:
+                  parent.remove(old)
+              parent.append(new_el)
+
           shutil.copy('output.docx', 'temp.docx')
 
           with zipfile.ZipFile('temp.docx', 'r') as zin, \
@@ -77,59 +93,63 @@ jobs:
                   data = zin.read(item.filename)
                   if item.filename == 'word/document.xml':
                       root = etree.fromstring(data)
-                      for el in root.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
+                      body = root.find(W('body'))
+
+                      # 1. Remove bookmarks
+                      for el in root.iter(W('bookmarkStart'), W('bookmarkEnd')):
                           el.getparent().remove(el)
-                      # Set tables to full page width and add black borders
-                      for tbl in root.iter(f'{{{ns}}}tbl'):
-                          tblPr = tbl.find(f'{{{ns}}}tblPr')
-                          if tblPr is None:
-                              tblPr = etree.SubElement(tbl, f'{{{ns}}}tblPr')
-                              tbl.insert(0, tblPr)
-                          existing_w = tblPr.find(f'{{{ns}}}tblW')
-                          if existing_w is not None:
-                              tblPr.remove(existing_w)
-                          tblPr.append(etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="5000" w:type="pct"/>'))
-                      # Add spacing around horizontal rules (--- in markdown)
-                      for p in root.iter(f'{{{ns}}}p'):
-                          pPr = p.find(f'{{{ns}}}pPr')
-                          if pPr is not None:
-                              pBdr = pPr.find(f'{{{ns}}}pBdr')
+
+                      # 2. Insert empty paragraph before each table
+                      for i, child in reversed(list(enumerate(body))):
+                          if child.tag == W('tbl'):
+                              spacer = etree.Element(W('p'))
+                              pPr = etree.SubElement(spacer, W('pPr'))
+                              etree.SubElement(pPr, W('spacing')).set(W('after'), '120')
+                              body.insert(i, spacer)
+
+                      # 3. Tables: full width (autofit) + black borders + cell padding
+                      for tbl in root.iter(W('tbl')):
+                          tblPr = get_or_create(tbl, 'tblPr')
+                          replace_child(tblPr, etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="0" w:type="auto"/>'))
+                          replace_child(tblPr, etree.fromstring(f'<w:tblLayout xmlns:w="{ns}" w:type="autofit"/>'))
+                          # Remove fixed gridCol widths
+                          tblGrid = tbl.find(W('tblGrid'))
+                          if tblGrid is not None:
+                              for gc in tblGrid.findall(W('gridCol')):
+                                  gc.attrib.pop(W('w'), None)
+                          for tc in tbl.iter(W('tc')):
+                              tcPr = get_or_create(tc, 'tcPr')
+                              replace_child(tcPr, etree.fromstring(f'''<w:tcBorders xmlns:w="{ns}">
+                                <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                              </w:tcBorders>'''))
+                              replace_child(tcPr, etree.fromstring(f'''<w:tcMar xmlns:w="{ns}">
+                                <w:top w:w="100" w:type="dxa"/>
+                                <w:left w:w="150" w:type="dxa"/>
+                                <w:bottom w:w="100" w:type="dxa"/>
+                                <w:right w:w="150" w:type="dxa"/>
+                              </w:tcMar>'''))
+
+                      # 4. Horizontal rule spacing + justify all body paragraphs
+                      for p in root.iter(W('p')):
+                          if p.getparent().tag == W('body') or p.getparent().tag == W('tc'):
+                              pPr = get_or_create(p, 'pPr')
+                              pBdr = pPr.find(W('pBdr'))
                               if pBdr is not None:
-                                  existing_sp = pPr.find(f'{{{ns}}}spacing')
-                                  if existing_sp is not None:
-                                      pPr.remove(existing_sp)
-                                  pPr.append(etree.fromstring(f'<w:spacing xmlns:w="{ns}" w:before="240" w:after="240"/>'))
-                      border_xml = lambda: etree.fromstring(f'''
-                        <w:tcBorders xmlns:w="{ns}">
-                          <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                          <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                          <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                          <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>
-                        </w:tcBorders>''')
-                      for tc in root.iter(f'{{{ns}}}tc'):
-                          tcp = tc.find(f'{{{ns}}}tcPr')
-                          if tcp is None:
-                              tcp = etree.SubElement(tc, f'{{{ns}}}tcPr')
-                              tc.insert(0, tcp)
-                          existing = tcp.find(f'{{{ns}}}tcBorders')
-                          if existing is not None:
-                              tcp.remove(existing)
-                          tcp.append(border_xml())
-                          # Add cell padding
-                          existing_mar = tcp.find(f'{{{ns}}}tcMar')
-                          if existing_mar is not None:
-                              tcp.remove(existing_mar)
-                          tcp.append(etree.fromstring(f'''
-                            <w:tcMar xmlns:w="{ns}">
-                              <w:top w:w="80" w:type="dxa"/>
-                              <w:left w:w="120" w:type="dxa"/>
-                              <w:bottom w:w="80" w:type="dxa"/>
-                              <w:right w:w="120" w:type="dxa"/>
-                            </w:tcMar>'''))
+                                  # Horizontal rule — add breathing room
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:spacing xmlns:w="{ns}" w:before="480" w:after="480"/>'))
+                              else:
+                                  # Justify all regular paragraphs
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:jc xmlns:w="{ns}" w:val="both"/>'))
+
                       data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
                   zout.writestr(item, data)
 
-          print('Bookmarks removed')
+          print('Post-processing complete')
           EOF
 
       - name: Upload to Google Drive
