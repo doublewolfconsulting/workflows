@@ -96,6 +96,17 @@ jobs:
                           if existing is not None:
                               tcp.remove(existing)
                           tcp.append(border_xml())
+                          # Add cell padding
+                          existing_mar = tcp.find(f'{{{ns}}}tcMar')
+                          if existing_mar is not None:
+                              tcp.remove(existing_mar)
+                          tcp.append(etree.fromstring(f'''
+                            <w:tcMar xmlns:w="{ns}">
+                              <w:top w:w="80" w:type="dxa"/>
+                              <w:left w:w="120" w:type="dxa"/>
+                              <w:bottom w:w="80" w:type="dxa"/>
+                              <w:right w:w="120" w:type="dxa"/>
+                            </w:tcMar>'''))
                       data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
                   zout.writestr(item, data)
 
