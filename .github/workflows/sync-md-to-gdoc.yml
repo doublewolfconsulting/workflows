@@ -54,7 +54,21 @@ jobs:
           fi
 
       - name: Install Python dependencies
-        run: pip install google-auth google-api-python-client
+        run: pip install google-auth google-api-python-client python-docx lxml
+
+      - name: Strip bookmarks from DOCX
+        run: |
+          python3 << 'EOF'
+          from lxml import etree
+          from docx import Document
+
+          doc = Document('output.docx')
+          ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+          for el in doc.element.body.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
+              el.getparent().remove(el)
+          doc.save('output.docx')
+          print('Bookmarks removed')
+          EOF
 
       - name: Upload to Google Drive
         env:
