@@ -99,13 +99,24 @@ jobs:
                       for el in root.iter(W('bookmarkStart'), W('bookmarkEnd')):
                           el.getparent().remove(el)
 
-                      # 2. Insert empty paragraph before each table
+                      # 2. Insert empty paragraph before tables and horizontal rules,
+                      #    and after tables
+                      def make_spacer():
+                          spacer = etree.Element(W('p'))
+                          pPr = etree.SubElement(spacer, W('pPr'))
+                          sp = etree.SubElement(pPr, W('spacing'))
+                          sp.set(W('before'), '0')
+                          sp.set(W('after'), '0')
+                          return spacer
+
                       for i, child in reversed(list(enumerate(body))):
                           if child.tag == W('tbl'):
-                              spacer = etree.Element(W('p'))
-                              pPr = etree.SubElement(spacer, W('pPr'))
-                              etree.SubElement(pPr, W('spacing')).set(W('after'), '120')
-                              body.insert(i, spacer)
+                              body.insert(i, make_spacer())       # before table
+                              body.insert(i + 2, make_spacer())   # after table
+                          elif child.tag == W('p'):
+                              pPr = child.find(W('pPr'))
+                              if pPr is not None and pPr.find(W('pBdr')) is not None:
+                                  body.insert(i, make_spacer())   # before horizontal rule
 
                       # 3. Tables: full width (autofit) + black borders + cell padding
                       for tbl in root.iter(W('tbl')):
