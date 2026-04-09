@@ -48,9 +48,9 @@ jobs:
       - name: Convert Markdown to DOCX
         run: |
           if [ -n "${{ inputs.reference_doc }}" ]; then
-            pandoc "${{ inputs.md_file }}" --from gfm --reference-doc="${{ inputs.reference_doc }}" -o output.docx
+            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables --reference-doc="${{ inputs.reference_doc }}" -o output.docx
           else
-            pandoc "${{ inputs.md_file }}" --from gfm -o output.docx
+            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables -o output.docx
           fi
 
       - name: Install Python dependencies
