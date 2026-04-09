@@ -54,19 +54,28 @@ jobs:
           fi
 
       - name: Install Python dependencies
-        run: pip install google-auth google-api-python-client python-docx lxml
+        run: pip install google-auth google-api-python-client lxml
 
       - name: Strip bookmarks from DOCX
         run: |
           python3 << 'EOF'
+          import zipfile, shutil
           from lxml import etree
-          from docx import Document
 
-          doc = Document('output.docx')
           ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-          for el in doc.element.body.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
-              el.getparent().remove(el)
-          doc.save('output.docx')
+          shutil.copy('output.docx', 'temp.docx')
+
+          with zipfile.ZipFile('temp.docx', 'r') as zin, \
+               zipfile.ZipFile('output.docx', 'w', zipfile.ZIP_DEFLATED) as zout:
+              for item in zin.infolist():
+                  data = zin.read(item.filename)
+                  if item.filename == 'word/document.xml':
+                      root = etree.fromstring(data)
+                      for el in root.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
+                          el.getparent().remove(el)
+                      data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+                  zout.writestr(item, data)
+
           print('Bookmarks removed')
           EOF
 
