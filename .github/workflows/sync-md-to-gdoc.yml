@@ -88,7 +88,17 @@ jobs:
                           existing_w = tblPr.find(f'{{{ns}}}tblW')
                           if existing_w is not None:
                               tblPr.remove(existing_w)
-                          tblPr.append(etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="9026" w:type="dxa"/>'))
+                          tblPr.append(etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="5000" w:type="pct"/>'))
+                      # Add spacing around horizontal rules (--- in markdown)
+                      for p in root.iter(f'{{{ns}}}p'):
+                          pPr = p.find(f'{{{ns}}}pPr')
+                          if pPr is not None:
+                              pBdr = pPr.find(f'{{{ns}}}pBdr')
+                              if pBdr is not None:
+                                  existing_sp = pPr.find(f'{{{ns}}}spacing')
+                                  if existing_sp is not None:
+                                      pPr.remove(existing_sp)
+                                  pPr.append(etree.fromstring(f'<w:spacing xmlns:w="{ns}" w:before="240" w:after="240"/>'))
                       border_xml = lambda: etree.fromstring(f'''
                         <w:tcBorders xmlns:w="{ns}">
                           <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
