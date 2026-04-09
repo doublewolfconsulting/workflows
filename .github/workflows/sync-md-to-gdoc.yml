@@ -7,6 +7,11 @@ on:
         description: Path to the markdown file (e.g. docs/prd.md)
         required: true
         type: string
+      reference_doc:
+        description: Optional path to a .docx reference template for Pandoc styling
+        required: false
+        type: string
+        default: ""
     secrets:
       WORKLOAD_IDENTITY_PROVIDER:
         description: Workload Identity Federation provider resource name
@@ -37,15 +42,13 @@ jobs:
       - name: Install Pandoc
         run: sudo apt-get install -y pandoc
 
-      - name: Checkout workflows repo for reference doc
-        uses: actions/checkout@v4
-        with:
-          repository: doublewolfconsulting/workflows
-          path: workflows-repo
-          token: ${{ github.token }}
-
       - name: Convert Markdown to DOCX
-        run: pandoc "${{ inputs.md_file }}" --reference-doc=workflows-repo/reference.docx -o output.docx
+        run: |
+          if [ -n "${{ inputs.reference_doc }}" ]; then
+            pandoc "${{ inputs.md_file }}" --reference-doc="${{ inputs.reference_doc }}" -o output.docx
+          else
+            pandoc "${{ inputs.md_file }}" -o output.docx
+          fi
 
       - name: Install Python dependencies
         run: pip install google-auth google-api-python-client
