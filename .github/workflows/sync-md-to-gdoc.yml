@@ -1,0 +1,66 @@
+name: Sync Markdown to Google Doc
+
+on:
+  workflow_call:
+    inputs:
+      md_file:
+        description: Path to the markdown file (e.g. docs/prd.md)
+        required: true
+        type: string
+    secrets:
+      WORKLOAD_IDENTITY_PROVIDER:
+        description: Workload Identity Federation provider resource name
+        required: true
+      SERVICE_ACCOUNT_EMAIL:
+        description: Google service account email
+        required: true
+      GOOGLE_DOC_ID:
+        description: Google Doc file ID
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+
+      - name: Install Pandoc
+        run: sudo apt-get install -y pandoc
+
+      - name: Convert Markdown to DOCX
+        run: pandoc "${{ inputs.md_file }}" -o output.docx
+
+      - name: Install Python dependencies
+        run: pip install google-auth google-api-python-client
+
+      - name: Upload to Google Drive
+        env:
+          GOOGLE_DOC_ID: ${{ secrets.GOOGLE_DOC_ID }}
+        run: |
+          python3 << 'EOF'
+          import os
+          import google.auth
+          from googleapiclient.discovery import build
+          from googleapiclient.http import MediaFileUpload
+
+          creds, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/drive'])
+          service = build('drive', 'v3', credentials=creds)
+
+          file_id = os.environ['GOOGLE_DOC_ID']
+          media = MediaFileUpload(
+              'output.docx',
+              mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          )
+          service.files().update(fileId=file_id, media_body=media).execute()
+          print(f'Synced to Google Doc: {file_id}')
+          EOF
