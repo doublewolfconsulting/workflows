@@ -165,14 +165,18 @@ jobs:
                                 <w:right w:w="150" w:type="dxa"/>
                               </w:tcMar>'''))
 
-                      # 4. Horizontal rule spacing + justify all body paragraphs
+                      # 4. Spacing + justify all body paragraphs
                       for p in root.iter(W('p')):
-                          if p.getparent().tag == W('body') or p.getparent().tag == W('tc'):
+                          parent_tag = p.getparent().tag
+                          if parent_tag in (W('body'), W('tc')):
                               pPr = get_or_create(p, 'pPr')
                               if is_hr(p):
                                   replace_child(pPr, etree.fromstring(
                                       f'<w:spacing xmlns:w="{ns}" w:before="480" w:after="480"/>'))
                               else:
+                                  # Preserve spacing from blank lines in markdown
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="160"/>'))
                                   replace_child(pPr, etree.fromstring(
                                       f'<w:jc xmlns:w="{ns}" w:val="both"/>'))
 
