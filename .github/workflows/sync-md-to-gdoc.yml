@@ -40,7 +40,10 @@ jobs:
           service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
       - name: Install Pandoc
-        run: sudo apt-get install -y pandoc
+        run: |
+          PANDOC_VERSION=$(curl -s https://api.github.com/repos/jgm/pandoc/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-amd64.deb" -o pandoc.deb
+          sudo dpkg -i pandoc.deb
 
       - name: Convert Markdown to DOCX
         run: |
