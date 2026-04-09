@@ -99,46 +99,29 @@ jobs:
                       for el in root.iter(W('bookmarkStart'), W('bookmarkEnd')):
                           el.getparent().remove(el)
 
-                      # 2. Insert empty paragraph before tables and horizontal rules,
-                      #    and after tables
+                      # 2. Insert empty paragraph after each table
                       def make_spacer():
                           spacer = etree.Element(W('p'))
                           pPr = etree.SubElement(spacer, W('pPr'))
                           sp = etree.SubElement(pPr, W('spacing'))
                           sp.set(W('before'), '0')
-                          sp.set(W('after'), '0')
+                          sp.set(W('after'), '160')
                           return spacer
 
                       def is_hr(p):
                           pPr = p.find(W('pPr'))
                           if pPr is None:
                               return False
-                          # Inline border
                           if pPr.find(W('pBdr')) is not None:
                               return True
-                          # Style-based horizontal rule
                           pStyle = pPr.find(W('pStyle'))
                           if pStyle is not None and pStyle.get(W('val'), '').lower() in ('horizontalrule', 'horizontal rule'):
                               return True
                           return False
 
-                      def is_bold_subheading(p):
-                          runs = p.findall(W('r'))
-                          if not runs:
-                              return False
-                          for r in runs:
-                              rPr = r.find(W('rPr'))
-                              if rPr is None or rPr.find(W('b')) is None:
-                                  return False
-                          return True
-
                       for i, child in reversed(list(enumerate(body))):
                           if child.tag == W('tbl'):
-                              body.insert(i, make_spacer())       # before table
-                              body.insert(i + 2, make_spacer())   # after table
-                          elif child.tag == W('p'):
-                              if is_hr(child) or is_bold_subheading(child):
-                                  body.insert(i, make_spacer())
+                              body.insert(i + 1, make_spacer())
 
                       # 3. Tables: full width (autofit) + black borders + cell padding
                       for tbl in root.iter(W('tbl')):
