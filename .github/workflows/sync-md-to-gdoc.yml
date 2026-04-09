@@ -37,8 +37,15 @@ jobs:
       - name: Install Pandoc
         run: sudo apt-get install -y pandoc
 
+      - name: Checkout workflows repo for reference doc
+        uses: actions/checkout@v4
+        with:
+          repository: doublewolfconsulting/workflows
+          path: workflows-repo
+          token: ${{ github.token }}
+
       - name: Convert Markdown to DOCX
-        run: pandoc "${{ inputs.md_file }}" -o output.docx
+        run: pandoc "${{ inputs.md_file }}" --reference-doc=workflows-repo/reference.docx -o output.docx
 
       - name: Install Python dependencies
         run: pip install google-auth google-api-python-client
