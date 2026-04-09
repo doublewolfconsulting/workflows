@@ -79,7 +79,16 @@ jobs:
                       root = etree.fromstring(data)
                       for el in root.iter(f'{{{ns}}}bookmarkStart', f'{{{ns}}}bookmarkEnd'):
                           el.getparent().remove(el)
-                      # Add black borders to all tables
+                      # Set tables to full page width and add black borders
+                      for tbl in root.iter(f'{{{ns}}}tbl'):
+                          tblPr = tbl.find(f'{{{ns}}}tblPr')
+                          if tblPr is None:
+                              tblPr = etree.SubElement(tbl, f'{{{ns}}}tblPr')
+                              tbl.insert(0, tblPr)
+                          existing_w = tblPr.find(f'{{{ns}}}tblW')
+                          if existing_w is not None:
+                              tblPr.remove(existing_w)
+                          tblPr.append(etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="9026" w:type="dxa"/>'))
                       border_xml = lambda: etree.fromstring(f'''
                         <w:tcBorders xmlns:w="{ns}">
                           <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
