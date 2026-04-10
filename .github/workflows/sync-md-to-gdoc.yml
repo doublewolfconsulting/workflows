@@ -7,6 +7,11 @@ on:
         description: Path to the markdown file (e.g. docs/prd.md)
         required: true
         type: string
+      reference_doc:
+        description: Optional path to a .docx reference template for Pandoc styling
+        required: false
+        type: string
+        default: ""
     secrets:
       WORKLOAD_IDENTITY_PROVIDER:
         description: Workload Identity Federation provider resource name
@@ -35,34 +40,130 @@ jobs:
           service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 
       - name: Install Pandoc
-        run: sudo apt-get install -y pandoc
+        run: |
+          PANDOC_VERSION=$(curl -s https://api.github.com/repos/jgm/pandoc/releases/latest | grep tag_name | cut -d '"' -f 4)
+          curl -sL "https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-amd64.deb" -o pandoc.deb
+          sudo dpkg -i pandoc.deb
 
       - name: Convert Markdown to DOCX
-        run: pandoc "${{ inputs.md_file }}" -o output.docx
+        run: |
+          if [ -n "${{ inputs.reference_doc }}" ]; then
+            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables --reference-doc="${{ inputs.reference_doc }}" -o output.docx
+          else
+            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables -o output.docx
+          fi
 
       - name: Install Python dependencies
-        run: pip install google-auth google-api-python-client python-docx
+        run: pip install google-auth google-api-python-client lxml
 
-      - name: Fix list paragraph spacing
+      - name: Post-process DOCX
         run: |
           python3 << 'EOF'
-          from docx import Document
-          from docx.shared import Pt
-          from docx.oxml.ns import qn
-          from docx.oxml import OxmlElement
+          import zipfile, shutil
+          from lxml import etree
 
-          doc = Document('output.docx')
-          for para in doc.paragraphs:
-              if para.style.name == 'List Paragraph':
-                  pPr = para._p.get_or_add_pPr()
-                  spacing = pPr.find(qn('w:spacing'))
-                  if spacing is None:
-                      spacing = OxmlElement('w:spacing')
-                      pPr.append(spacing)
-                  spacing.set(qn('w:after'), '0')
-                  spacing.set(qn('w:before'), '0')
-          doc.save('output.docx')
-          print('List paragraph spacing fixed')
+          ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+          W = lambda tag: f'{{{ns}}}{tag}'
+
+          def get_or_create(parent, tag, insert_pos=0):
+              el = parent.find(W(tag))
+              if el is None:
+                  el = etree.SubElement(parent, W(tag))
+                  parent.insert(insert_pos, el)
+              return el
+
+          def replace_child(parent, new_el):
+              tag = new_el.tag
+              old = parent.find(tag)
+              if old is not None:
+                  parent.remove(old)
+              parent.append(new_el)
+
+          shutil.copy('output.docx', 'temp.docx')
+
+          with zipfile.ZipFile('temp.docx', 'r') as zin, \
+               zipfile.ZipFile('output.docx', 'w', zipfile.ZIP_DEFLATED) as zout:
+              for item in zin.infolist():
+                  data = zin.read(item.filename)
+                  if item.filename == 'word/document.xml':
+                      root = etree.fromstring(data)
+                      body = root.find(W('body'))
+
+                      # 1. Remove bookmarks
+                      for el in root.iter(W('bookmarkStart'), W('bookmarkEnd')):
+                          el.getparent().remove(el)
+
+                      # 2. Insert actual empty paragraph between every body element
+                      def make_spacer():
+                          spacer = etree.Element(W('p'))
+                          pPr = etree.SubElement(spacer, W('pPr'))
+                          sp = etree.SubElement(pPr, W('spacing'))
+                          sp.set(W('before'), '0')
+                          sp.set(W('after'), '0')
+                          return spacer
+
+                      def is_hr(p):
+                          pPr = p.find(W('pPr'))
+                          if pPr is None:
+                              return False
+                          if pPr.find(W('pBdr')) is not None:
+                              return True
+                          pStyle = pPr.find(W('pStyle'))
+                          if pStyle is not None and pStyle.get(W('val'), '').lower() in ('horizontalrule', 'horizontal rule'):
+                              return True
+                          return False
+
+                      children = list(body)
+                      for i, child in reversed(list(enumerate(children))):
+                          # Insert spacer after every element except the last sectPr
+                          if child.tag != W('sectPr') and i < len(children) - 1:
+                              next_el = children[i + 1]
+                              if next_el.tag != W('sectPr'):
+                                  body.insert(i + 1, make_spacer())
+
+                      # 3. Tables: full width (autofit) + black borders + cell padding
+                      for tbl in root.iter(W('tbl')):
+                          tblPr = get_or_create(tbl, 'tblPr')
+                          replace_child(tblPr, etree.fromstring(f'<w:tblW xmlns:w="{ns}" w:w="0" w:type="auto"/>'))
+                          replace_child(tblPr, etree.fromstring(f'<w:tblLayout xmlns:w="{ns}" w:type="autofit"/>'))
+                          # Remove fixed gridCol widths
+                          tblGrid = tbl.find(W('tblGrid'))
+                          if tblGrid is not None:
+                              for gc in tblGrid.findall(W('gridCol')):
+                                  gc.attrib.pop(W('w'), None)
+                          for tc in tbl.iter(W('tc')):
+                              tcPr = get_or_create(tc, 'tcPr')
+                              replace_child(tcPr, etree.fromstring(f'''<w:tcBorders xmlns:w="{ns}">
+                                <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                                <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+                              </w:tcBorders>'''))
+                              replace_child(tcPr, etree.fromstring(f'''<w:tcMar xmlns:w="{ns}">
+                                <w:top w:w="100" w:type="dxa"/>
+                                <w:left w:w="150" w:type="dxa"/>
+                                <w:bottom w:w="100" w:type="dxa"/>
+                                <w:right w:w="150" w:type="dxa"/>
+                              </w:tcMar>'''))
+
+                      # 4. Spacing + justify all body paragraphs
+                      for p in root.iter(W('p')):
+                          parent_tag = p.getparent().tag
+                          if parent_tag in (W('body'), W('tc')):
+                              pPr = get_or_create(p, 'pPr')
+                              if is_hr(p):
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="0"/>'))
+                              else:
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:spacing xmlns:w="{ns}" w:before="0" w:after="0"/>'))
+                                  replace_child(pPr, etree.fromstring(
+                                      f'<w:jc xmlns:w="{ns}" w:val="both"/>'))
+
+                      data = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+                  zout.writestr(item, data)
+
+          print('Post-processing complete')
           EOF
 
       - name: Upload to Google Drive
