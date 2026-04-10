@@ -113,13 +113,24 @@ jobs:
                               return True
                           return False
 
+                      def get_style(el):
+                          pPr = el.find(W('pPr'))
+                          if pPr is None:
+                              return ''
+                          pStyle = pPr.find(W('pStyle'))
+                          return pStyle.get(W('val'), '') if pStyle is not None else ''
+
                       children = list(body)
                       for i, child in reversed(list(enumerate(children))):
                           # Insert spacer after every element except the last sectPr
+                          # and except between consecutive list paragraphs
                           if child.tag != W('sectPr') and i < len(children) - 1:
                               next_el = children[i + 1]
                               if next_el.tag != W('sectPr'):
-                                  body.insert(i + 1, make_spacer())
+                                  if get_style(child) == 'ListParagraph' and get_style(next_el) == 'ListParagraph':
+                                      pass  # no spacer between consecutive list items
+                                  else:
+                                      body.insert(i + 1, make_spacer())
 
                       # 3. Tables: full width (autofit) + black borders + cell padding
                       for tbl in root.iter(W('tbl')):
