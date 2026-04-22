@@ -47,10 +47,11 @@ jobs:
 
       - name: Convert Markdown to DOCX
         run: |
+          RESOURCE_PATH="$(dirname "${{ inputs.md_file }}")"
           if [ -n "${{ inputs.reference_doc }}" ]; then
-            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables --reference-doc="${{ inputs.reference_doc }}" -o output.docx
+            pandoc "${{ inputs.md_file }}" --resource-path="$RESOURCE_PATH" --from markdown+pipe_tables --reference-doc="${{ inputs.reference_doc }}" -o output.docx
           else
-            pandoc "${{ inputs.md_file }}" --from markdown+pipe_tables -o output.docx
+            pandoc "${{ inputs.md_file }}" --resource-path="$RESOURCE_PATH" --from markdown+pipe_tables -o output.docx
           fi
 
       - name: Install Python dependencies
