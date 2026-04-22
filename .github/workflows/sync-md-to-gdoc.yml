@@ -118,6 +118,14 @@ jobs:
                           pPr = el.find(W('pPr'))
                           return pPr is not None and pPr.find(W('numPr')) is not None
 
+                      def get_list_level(el):
+                          pPr = el.find(W('pPr'))
+                          if pPr is None: return -1
+                          numPr = pPr.find(W('numPr'))
+                          if numPr is None: return -1
+                          ilvl = numPr.find(W('ilvl'))
+                          return int(ilvl.get(W('val'), '0')) if ilvl is not None else 0
+
                       children = list(body)
                       for i, child in reversed(list(enumerate(children))):
                           # Insert spacer after every element except the last sectPr
@@ -126,7 +134,11 @@ jobs:
                               next_el = children[i + 1]
                               if next_el.tag != W('sectPr'):
                                   if is_list_item(child) and is_list_item(next_el):
-                                      pass  # no spacer between consecutive list items
+                                      child_level = get_list_level(child)
+                                      next_level = get_list_level(next_el)
+                                      if child_level > 0 and next_level == 0:
+                                          body.insert(i + 1, make_spacer())  # spacer before each new top-level item
+                                      # all other list-to-list transitions: no spacer
                                   else:
                                       body.insert(i + 1, make_spacer())
 
