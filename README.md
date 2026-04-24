@@ -44,6 +44,80 @@ jobs:
 
 ---
 
+## Index Notify
+
+**File:** `.github/workflows/index-notify.yml`
+
+Submits URLs to the [Google Indexing API](https://developers.google.com/search/apis/indexing-api/v3/quickstart) and [IndexNow](https://www.indexnow.org/) (Bing, Yandex) after a deploy, replacing the manual "Request Indexing" button in Google Search Console.
+
+Both submit steps use `continue-on-error: true`, so indexing failures never block a deploy. The job itself should be called with `continue-on-error: true` in the consuming workflow for the same reason.
+
+### Usage
+
+Expose detected URLs as a job output in your deploy workflow, then call this workflow as a second job:
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      urls: ${{ steps.detect-urls.outputs.urls }}
+    steps:
+      # ... your deploy steps ...
+      - name: Detect changed pages
+        id: detect-urls
+        run: |
+          echo "urls=https://example.com/ https://example.com/faq" >> "$GITHUB_OUTPUT"
+
+  index-notify:
+    needs: deploy
+    if: needs.deploy.outputs.urls != ''
+    continue-on-error: true
+    uses: YOUR_ORG/YOUR_WORKFLOWS_REPO/.github/workflows/index-notify.yml@main
+    with:
+      urls: ${{ needs.deploy.outputs.urls }}
+    secrets:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_INDEXING_REFRESH_TOKEN: ${{ secrets.GOOGLE_INDEXING_REFRESH_TOKEN }}
+      INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+```
+
+For emergency manual submission without a full deploy, trigger via the GitHub Actions UI with explicit URLs.
+
+### Inputs
+
+| Input | Required | Description |
+|-------|----------|-------------|
+| `urls` | Yes | Space-separated URLs to submit (e.g. `https://example.com/ https://example.com/faq`) |
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `GOOGLE_OAUTH_CLIENT_ID` | OAuth client ID (GCP project with Web Search Indexing API enabled) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret from the same GCP project |
+| `GOOGLE_INDEXING_REFRESH_TOKEN` | Long-lived refresh token from OAuth Playground, authorized as GSC property owner |
+| `INDEXNOW_KEY` | IndexNow key string (must match the key file served at `https://{host}/{key}.txt`) |
+
+### Setup
+
+1. **GCP project** — enable the *Web Search Indexing API*. Create an OAuth 2.0 client (Web application type) with `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+
+2. **Refresh token** — go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/), click the settings gear, enable "Use your own OAuth credentials", enter your client ID and secret. Authorize scope `https://www.googleapis.com/auth/indexing` using the Google account that owns the GSC property. Exchange the authorization code and copy the refresh token. Add all four values as repository secrets.
+
+3. **GSC ownership** — the Google account used in step 2 must be a verified owner of the property in Google Search Console. Service accounts cannot be granted GSC ownership via the UI.
+
+4. **IndexNow key file** — serve a plain-text file at `https://{your-host}/{INDEXNOW_KEY}.txt` containing only the key string. This lets IndexNow verify site ownership.
+
+### Notes
+
+- Google Indexing API is officially documented for `JobPosting`/`BroadcastEvent` schema types but works for general pages. If Google stops accepting submissions, IndexNow continues to cover Bing and Yandex, and Google crawls the sitemap naturally.
+- The `host` for the IndexNow payload is derived from the first URL in the list.
+- `GOOGLE_INDEXING_REFRESH_TOKEN` is tied to the authorizing Google account. If that account loses GSC ownership or the token is revoked, re-authorize via OAuth Playground.
+
+---
+
 ## Sync Markdown to Google Doc
 
 **File:** `.github/workflows/sync-md-to-gdoc.yml`
