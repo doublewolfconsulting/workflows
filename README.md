@@ -124,6 +124,7 @@ For emergency manual submission without a full deploy, trigger via the GitHub Ac
 Converts a Markdown file to DOCX via [Pandoc](https://pandoc.org/) and uploads it to an existing Google Doc, keeping the Doc in sync with your repo on every push.
 
 Post-processing applied to the DOCX before upload:
+
 - Removes Word bookmarks
 - Inserts empty paragraphs between body elements to preserve blank lines
 - Makes tables full-width with black borders and consistent cell padding
