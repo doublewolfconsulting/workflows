@@ -1,0 +1,81 @@
+name: Index Notify
+
+on:
+  workflow_call:
+    inputs:
+      urls:
+        description: 'Space-separated URLs to submit'
+        required: true
+        type: string
+    secrets:
+      GOOGLE_OAUTH_CLIENT_ID:
+        required: true
+      GOOGLE_OAUTH_CLIENT_SECRET:
+        required: true
+      GOOGLE_INDEXING_REFRESH_TOKEN:
+        required: true
+      INDEXNOW_KEY:
+        required: true
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'Space-separated URLs to submit (e.g. https://example.com/ https://example.com/faq)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit to Google Indexing API
+        continue-on-error: true
+        env:
+          SUBMIT_URLS: ${{ inputs.urls }}
+        run: |
+          # Exchange refresh token for access token
+          TOKEN_RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
+            -d "refresh_token=${{ secrets.GOOGLE_INDEXING_REFRESH_TOKEN }}" \
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get access token: $TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          # Submit each URL
+          for URL in $SUBMIT_URLS; do
+            RESPONSE=$(curl -s -o /tmp/google_resp.txt -w "%{http_code}" \
+              -X POST "https://indexing.googleapis.com/v3/urlNotifications:publish" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\": \"$URL\", \"type\": \"URL_UPDATED\"}")
+            echo "Google [$RESPONSE] $URL:"; cat /tmp/google_resp.txt; echo
+          done
+
+      - name: Submit to IndexNow
+        continue-on-error: true
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: |
+          URLS_RAW="${{ inputs.urls }}"
+          URL_ARRAY=$(echo "$URLS_RAW" | tr ' ' '\n' | grep -v '^$' | jq -R . | jq -s .)
+          # Extract host from first URL
+          HOST=$(echo "$URLS_RAW" | tr ' ' '\n' | grep -v '^$' | head -1 | sed 's|https\?://||' | cut -d'/' -f1)
+          PAYLOAD=$(jq -n \
+            --arg host "$HOST" \
+            --arg key "$INDEXNOW_KEY" \
+            --arg keyLocation "https://${HOST}/${INDEXNOW_KEY}.txt" \
+            --argjson urlList "$URL_ARRAY" \
+            '{host: $host, key: $key, keyLocation: $keyLocation, urlList: $urlList}')
+          echo "Payload: $PAYLOAD"
+          STATUS=$(curl -s -o /tmp/resp.txt -w "%{http_code}" \
+            -X POST "https://api.indexnow.org/indexnow" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          echo "IndexNow [$STATUS]:"; cat /tmp/resp.txt; echo
+          [ "$STATUS" = "200" ] || [ "$STATUS" = "202" ] && echo "Success." || echo "Non-fatal: HTTP $STATUS"
