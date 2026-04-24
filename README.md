@@ -50,7 +50,7 @@ jobs:
 
 Submits URLs to the [Google Indexing API](https://developers.google.com/search/apis/indexing-api/v3/quickstart) and [IndexNow](https://www.indexnow.org/) (Bing, Yandex) after a deploy, replacing the manual "Request Indexing" button in Google Search Console.
 
-Both submit steps use `continue-on-error: true`, so indexing failures never block a deploy. The job itself should be called with `continue-on-error: true` in the consuming workflow for the same reason.
+Both submit steps use `continue-on-error: true`, so indexing failures never block a deploy.
 
 ### Usage
 
@@ -72,7 +72,6 @@ jobs:
   index-notify:
     needs: deploy
     if: needs.deploy.outputs.urls != ''
-    continue-on-error: true
     uses: YOUR_ORG/YOUR_WORKFLOWS_REPO/.github/workflows/index-notify.yml@main
     with:
       urls: ${{ needs.deploy.outputs.urls }}
