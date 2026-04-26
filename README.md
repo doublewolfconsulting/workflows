@@ -8,7 +8,7 @@ A collection of reusable GitHub Actions workflows.
 
 **File:** `.github/workflows/psi-monitor.yml`
 
-Monitors your site's [Google PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores on a schedule and uses Claude to analyze regressions, then opens GitHub issues or pull requests when performance drops.
+Runs three checks on a schedule: [PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores (mobile and desktop), a Playwright site audit, and optional JSON-LD schema validation. On any failure, uses Claude to diagnose the root cause and opens a GitHub issue with the diagnosis. If confidence is high, also opens a draft PR with a proposed fix.
 
 ### Usage
 
