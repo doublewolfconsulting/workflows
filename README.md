@@ -51,6 +51,31 @@ jobs:
 
 ### How it works
 
+Three checks run on every execution. All three must pass or a `site-health` issue is opened.
+
+**1. PSI scores**
+
+Fetches Google PageSpeed Insights for both mobile and desktop. If either score falls below the configured threshold, the run retries once after 5 minutes before raising an alarm. This avoids false positives from transient measurement noise.
+
+**2. Playwright site audit**
+
+Launches a headless Chromium browser against the live site and runs a Playwright script that checks rendering, navigation, and basic accessibility. Failures indicate something broke in production that PSI alone would not catch.
+
+**3. Schema validation**
+
+If `schema_config` is provided, navigates to each URL via Playwright and extracts all JSON-LD `@type` values (including types nested inside parent objects, e.g. `AggregateRating` inside `Organization`). Fails if any expected type is missing.
+
+**On failure**
+
+The failing checks are passed to `claude-sonnet-4-6` alongside the files listed in `context_files`. Claude diagnoses the root cause and proposes a fix. The workflow then:
+
+- Opens a GitHub issue labelled `site-health` with the PSI scores, Playwright output, schema failures, and Claude's diagnosis
+- If Claude's confidence is high and the fix matches a known pattern, opens a draft PR with the proposed change
+- On subsequent failures while the issue is open, appends a comment rather than opening a new issue
+- Auto-closes the issue when all checks pass again
+
+**Internals**
+
 The workflow checks out both the caller's repo (for context files and git operations) and this workflows repo (for the script and its dependencies) into a `_wf/` subfolder. No script or `package.json` is needed in the calling repo.
 
 ---
