@@ -27,6 +27,7 @@ jobs:
       mobile_threshold: 90
       desktop_threshold: 90
       context_files: 'CLAUDE.md src/index.html'  # space-separated, repo-relative
+      schema_config: '{"https://example.com/":["Organization","WebSite","WebPage"]}'  # optional
     secrets: inherit
 ```
 
@@ -38,6 +39,7 @@ jobs:
 | `mobile_threshold` | No | `90` | Minimum mobile PSI score |
 | `desktop_threshold` | No | `90` | Minimum desktop PSI score |
 | `context_files` | No | `CLAUDE.md` | Space-separated repo-relative paths to include in Claude's context when diagnosing failures |
+| `schema_config` | No | (none) | JSON object mapping URLs to arrays of expected JSON-LD `@type` values. Fails the run if any expected type is missing from the page. Nested types (e.g. `AggregateRating` inside `Organization`) are detected via full recursive traversal. Example: `{"https://example.com/":["Organization","WebSite"]}` |
 
 ### Setup
 
