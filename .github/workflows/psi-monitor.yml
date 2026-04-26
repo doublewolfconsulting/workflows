@@ -47,10 +47,13 @@ jobs:
           cache: npm
           cache-dependency-path: _wf/package-lock.json
 
+      # Installs the playwright npm package (JavaScript API used by psi-monitor.mjs).
       - name: Install dependencies
         run: npm ci
         working-directory: _wf
 
+      # Installs the Chromium browser binary. Separate from the npm package above:
+      # npm ci gives the JS API, this step gives the actual browser to launch.
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
         working-directory: _wf
