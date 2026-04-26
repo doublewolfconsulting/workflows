@@ -258,18 +258,21 @@ async function validateSchema() {
     try {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
       const foundTypes = await page.evaluate(function() {
+        // Recursively collect all @type values from a JSON-LD object.
+        // Necessary because some types (e.g. AggregateRating) are nested inside
+        // parent nodes (e.g. Organization) rather than being top-level @graph nodes.
+        function collectTypes(obj, types) {
+          if (!obj || typeof obj !== 'object') return;
+          if (Array.isArray(obj)) { obj.forEach(function(item) { collectTypes(item, types); }); return; }
+          const t = obj['@type'];
+          if (Array.isArray(t)) t.forEach(function(x) { types.add(x); });
+          else if (t) types.add(t);
+          Object.values(obj).forEach(function(val) { if (val && typeof val === 'object') collectTypes(val, types); });
+        }
         const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
         const types = new Set();
         for (const script of scripts) {
-          try {
-            const data = JSON.parse(script.textContent);
-            const nodes = data['@graph'] ? data['@graph'] : [data];
-            for (const node of nodes) {
-              const t = node['@type'];
-              if (Array.isArray(t)) t.forEach(function(x) { types.add(x); });
-              else if (t) types.add(t);
-            }
-          } catch {}
+          try { collectTypes(JSON.parse(script.textContent), types); } catch {}
         }
         return Array.from(types);
       });
