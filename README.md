@@ -24,8 +24,8 @@ jobs:
     uses: doublewolfconsulting/workflows/.github/workflows/psi-monitor.yml@main
     with:
       site_url: 'https://example.com'
-      mobile_threshold: 95
-      desktop_threshold: 95
+      mobile_threshold: 90
+      desktop_threshold: 90
       context_files: 'CLAUDE.md src/index.html'  # space-separated, repo-relative
     secrets: inherit
 ```
