@@ -19,6 +19,11 @@ on:
         required: false
         type: string
         default: 'CLAUDE.md'
+      schema_config:
+        description: 'JSON mapping URLs to expected schema @type arrays for validation'
+        required: false
+        type: string
+        default: ''
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -68,3 +73,4 @@ jobs:
           MOBILE_THRESHOLD: ${{ inputs.mobile_threshold }}
           DESKTOP_THRESHOLD: ${{ inputs.desktop_threshold }}
           CONTEXT_FILES: ${{ inputs.context_files }}
+          SCHEMA_CONFIG: ${{ inputs.schema_config }}
