@@ -13,19 +13,31 @@ Monitors your site's [Google PageSpeed Insights](https://developers.google.com/s
 ### Usage
 
 ```yaml
-# .github/workflows/monitor.yml
+# .github/workflows/psi-monitor.yml
 on:
   schedule:
-    - cron: '0 9 * * 1'  # every Monday at 9am
+    - cron: '0 1 * * 1'  # every Monday at 09:00 SGT (01:00 UTC)
   workflow_dispatch:
 
 jobs:
-  psi:
-    uses: Double-Wolf/workflows/.github/workflows/psi-monitor.yml@main
-    secrets:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GOOGLE_PSI_API_KEY: ${{ secrets.GOOGLE_PSI_API_KEY }}
+  monitor:
+    uses: doublewolfconsulting/workflows/.github/workflows/psi-monitor.yml@main
+    with:
+      site_url: 'https://example.com'
+      mobile_threshold: 95
+      desktop_threshold: 95
+      context_files: 'CLAUDE.md src/index.html'  # space-separated, repo-relative
+    secrets: inherit
 ```
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `site_url` | Yes | — | The URL to audit (e.g. `https://example.com`) |
+| `mobile_threshold` | No | `90` | Minimum mobile PSI score |
+| `desktop_threshold` | No | `90` | Minimum desktop PSI score |
+| `context_files` | No | `CLAUDE.md` | Space-separated repo-relative paths to include in Claude's context when diagnosing failures |
 
 ### Setup
 
@@ -33,14 +45,11 @@ jobs:
 
 2. **Anthropic API key** — get one from [console.anthropic.com](https://console.anthropic.com/). Add it as a repository secret named `ANTHROPIC_API_KEY`.
 
-3. **`GITHUB_TOKEN`** — provided automatically by Actions. The workflow needs `contents: write`, `issues: write`, and `pull-requests: write` permissions, so make sure your repo's Actions settings allow it (or grant them explicitly via the calling workflow).
+3. **`GITHUB_TOKEN`** — provided automatically by Actions. The workflow needs `contents: write`, `issues: write`, and `pull-requests: write` permissions, granted via the `permissions:` block in the shared workflow.
 
-4. **`scripts/psi-monitor.mjs`** — add this script to your repository. It should export the logic for fetching PSI scores, comparing them, and creating issues/PRs. The workflow passes `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, and `GOOGLE_PSI_API_KEY` as environment variables.
+### How it works
 
-### Requirements
-
-- `package.json` + `package-lock.json` at the repo root (the workflow runs `npm ci`)
-- Node.js 24 compatible code
+The workflow checks out both the caller's repo (for context files and git operations) and this workflows repo (for the script and its dependencies) into a `_wf/` subfolder. No script or `package.json` is needed in the calling repo.
 
 ---
 
@@ -141,7 +150,7 @@ on:
 
 jobs:
   sync:
-    uses: Double-Wolf/workflows/.github/workflows/sync-md-to-gdoc.yml@main
+    uses: doublewolfconsulting/workflows/.github/workflows/sync-md-to-gdoc.yml@main
     with:
       md_file: docs/prd.md
       reference_doc: docs/template.docx  # optional

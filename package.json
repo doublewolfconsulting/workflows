@@ -1,0 +1,8 @@
+{
+  "name": "dw-workflows",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "playwright": "^1.52.0"
+  }
+}

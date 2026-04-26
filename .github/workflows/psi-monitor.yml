@@ -2,6 +2,23 @@ name: PSI Monitor
 
 on:
   workflow_call:
+    inputs:
+      site_url:
+        required: true
+        type: string
+      mobile_threshold:
+        required: false
+        type: number
+        default: 90
+      desktop_threshold:
+        required: false
+        type: number
+        default: 90
+      context_files:
+        description: 'Space-separated repo-relative file paths to include in Claude context'
+        required: false
+        type: string
+        default: 'CLAUDE.md'
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -17,22 +34,34 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4          # caller's repo (context files + git for auto-fix PRs)
+
+      - uses: actions/checkout@v4          # this workflows repo (script + deps)
+        with:
+          repository: doublewolfconsulting/workflows
+          path: _wf
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: _wf/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+        working-directory: _wf
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
+        working-directory: _wf
 
       - name: Run PSI monitor
-        run: node scripts/psi-monitor.mjs
+        run: node _wf/scripts/psi-monitor.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_PSI_API_KEY: ${{ secrets.GOOGLE_PSI_API_KEY }}
+          SITE_URL: ${{ inputs.site_url }}
+          MOBILE_THRESHOLD: ${{ inputs.mobile_threshold }}
+          DESKTOP_THRESHOLD: ${{ inputs.desktop_threshold }}
+          CONTEXT_FILES: ${{ inputs.context_files }}
