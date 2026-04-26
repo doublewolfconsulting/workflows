@@ -8,7 +8,7 @@ A collection of reusable GitHub Actions workflows.
 
 **File:** `.github/workflows/psi-monitor.yml`
 
-Runs three checks on a schedule: [PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores (mobile and desktop), a Playwright site audit, and optional JSON-LD schema validation. On any failure, uses Claude to diagnose the root cause and opens a GitHub issue with the diagnosis. If confidence is high, also opens a draft PR with a proposed fix.
+Runs on a schedule: checks [PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores, runs a Playwright site audit, and validates JSON-LD schema if `schema_config` is provided. On any failure, uses Claude to diagnose the root cause and opens a GitHub issue. If confidence is high, also opens a draft PR with a proposed fix.
 
 ### Usage
 
