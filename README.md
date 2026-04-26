@@ -34,18 +34,18 @@ jobs:
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `site_url` | Yes | — | The URL to audit (e.g. `https://example.com`) |
+| `site_url` | Yes | (none) | The URL to audit (e.g. `https://example.com`) |
 | `mobile_threshold` | No | `90` | Minimum mobile PSI score |
 | `desktop_threshold` | No | `90` | Minimum desktop PSI score |
 | `context_files` | No | `CLAUDE.md` | Space-separated repo-relative paths to include in Claude's context when diagnosing failures |
 
 ### Setup
 
-1. **Google PSI API key** — get one from the [Google Cloud Console](https://console.cloud.google.com/) with the *PageSpeed Insights API* enabled. Add it as a repository secret named `GOOGLE_PSI_API_KEY`.
+1. **Google PSI API key**: get one from the [Google Cloud Console](https://console.cloud.google.com/) with the *PageSpeed Insights API* enabled. Add it as a repository secret named `GOOGLE_PSI_API_KEY`.
 
-2. **Anthropic API key** — get one from [console.anthropic.com](https://console.anthropic.com/). Add it as a repository secret named `ANTHROPIC_API_KEY`.
+2. **Anthropic API key**: get one from [console.anthropic.com](https://console.anthropic.com/). Add it as a repository secret named `ANTHROPIC_API_KEY`.
 
-3. **`GITHUB_TOKEN`** — provided automatically by Actions. The workflow needs `contents: write`, `issues: write`, and `pull-requests: write` permissions, granted via the `permissions:` block in the shared workflow.
+3. **`GITHUB_TOKEN`**: provided automatically by Actions. The workflow needs `contents: write`, `issues: write`, and `pull-requests: write` permissions, granted via the `permissions:` block in the shared workflow.
 
 ### How it works
 
@@ -110,13 +110,13 @@ For emergency manual submission without a full deploy, trigger via the GitHub Ac
 
 ### Setup
 
-1. **GCP project** — enable the *Web Search Indexing API*. Create an OAuth 2.0 client (Web application type) with `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+1. **GCP project**: enable the *Web Search Indexing API*. Create an OAuth 2.0 client (Web application type) with `https://developers.google.com/oauthplayground` as an authorized redirect URI.
 
-2. **Refresh token** — go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/), click the settings gear, enable "Use your own OAuth credentials", enter your client ID and secret. Authorize scope `https://www.googleapis.com/auth/indexing` using the Google account that owns the GSC property. Exchange the authorization code and copy the refresh token. Add all four values as repository secrets.
+2. **Refresh token**: go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/), click the settings gear, enable "Use your own OAuth credentials", enter your client ID and secret. Authorize scope `https://www.googleapis.com/auth/indexing` using the Google account that owns the GSC property. Exchange the authorization code and copy the refresh token. Add all four values as repository secrets.
 
-3. **GSC ownership** — the Google account used in step 2 must be a verified owner of the property in Google Search Console. Service accounts cannot be granted GSC ownership via the UI.
+3. **GSC ownership**: the Google account used in step 2 must be a verified owner of the property in Google Search Console. Service accounts cannot be granted GSC ownership via the UI.
 
-4. **IndexNow key file** — serve a plain-text file at `https://{your-host}/{INDEXNOW_KEY}.txt` containing only the key string. This lets IndexNow verify site ownership.
+4. **IndexNow key file**: serve a plain-text file at `https://{your-host}/{INDEXNOW_KEY}.txt` containing only the key string. This lets IndexNow verify site ownership.
 
 ### Notes
 
@@ -177,8 +177,8 @@ jobs:
 
 ### Setup
 
-1. **Google Doc** — create the Doc and copy its file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`). Add it as `GOOGLE_DOC_ID`.
+1. **Google Doc**: create the Doc and copy its file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`). Add it as `GOOGLE_DOC_ID`.
 
-2. **Google Cloud service account** — create a service account in Google Cloud, share the Google Doc with it (Editor), and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
+2. **Google Cloud service account**: create a service account in Google Cloud, share the Google Doc with it (Editor), and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
 
-3. **Permissions** — the calling workflow needs `id-token: write` and `contents: read`. These are set automatically by this workflow, but your repo's Actions settings must allow it.
+3. **Permissions**: the calling workflow needs `id-token: write` and `contents: read`. These are set automatically by this workflow, but your repo's Actions settings must allow it.
