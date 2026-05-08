@@ -22,7 +22,7 @@
  *   MOBILE_THRESHOLD    -- minimum mobile PSI score (default 90)
  *   DESKTOP_THRESHOLD   -- minimum desktop PSI score (default 90)
  *   CONTEXT_FILES       -- space-separated repo-relative paths to include in Claude context
- *   SCHEMA_CONFIG       -- optional JSON mapping URLs to expected schema @type arrays
+ *   SCHEMA_CONFIG       -- optional JSON mapping URLs to expected schema type arrays
  *                          e.g. {"https://example.com/":["Organization","WebSite","WebPage"]}
  */
 
@@ -258,7 +258,7 @@ async function validateSchema() {
     try {
       await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
       const foundTypes = await page.evaluate(function() {
-        // Recursively collect all @type values from a JSON-LD object.
+        // Recursively collect all JSON-LD type values from a JSON-LD object.
         // Necessary because some types (e.g. AggregateRating) are nested inside
         // parent nodes (e.g. Organization) rather than being top-level @graph nodes.
         function collectTypes(obj, types) {
