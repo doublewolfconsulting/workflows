@@ -39,7 +39,7 @@ jobs:
 | `mobile_threshold` | No | `90` | Minimum mobile PSI score |
 | `desktop_threshold` | No | `90` | Minimum desktop PSI score |
 | `context_files` | No | `CLAUDE.md` | Space-separated repo-relative paths to include in Claude's context when diagnosing failures |
-| `schema_config` | No | (none) | JSON object mapping URLs to arrays of expected JSON-LD `@type` values. Fails the run if any expected type is missing from the page. Nested types (e.g. `AggregateRating` inside `Organization`) are detected via full recursive traversal. Example: `{"https://example.com/":["Organization","WebSite"]}` |
+| `schema_config` | No | (none) | JSON object mapping URLs to arrays of expected JSON-LD type values. Fails the run if any expected type is missing from the page. Nested types (e.g. `AggregateRating` inside `Organization`) are detected via full recursive traversal. Example: `{"https://example.com/":["Organization","WebSite"]}` |
 
 ### Setup
 
@@ -63,7 +63,7 @@ Launches a headless Chromium browser against the live site and runs a Playwright
 
 #### 3. Schema validation
 
-If `schema_config` is provided, navigates to each URL via Playwright and extracts all JSON-LD `@type` values (including types nested inside parent objects, e.g. `AggregateRating` inside `Organization`). Fails if any expected type is missing.
+If `schema_config` is provided, navigates to each URL via Playwright and extracts all JSON-LD type values (including types nested inside parent objects, e.g. `AggregateRating` inside `Organization`). Fails if any expected type is missing.
 
 #### On failure
 

@@ -20,7 +20,7 @@ on:
         type: string
         default: 'CLAUDE.md'
       schema_config:
-        description: 'JSON mapping URLs to expected schema @type arrays for validation'
+        description: 'JSON mapping URLs to expected schema type arrays for validation'
         required: false
         type: string
         default: ''
