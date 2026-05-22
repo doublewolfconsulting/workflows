@@ -80,6 +80,73 @@ The workflow checks out both the caller's repo (for context files and git operat
 
 ---
 
+## Site Test
+
+**File:** `.github/workflows/site-test.yml`
+
+Builds the caller's site, serves `dist/` locally, and runs functional tests against it on every PR. Tests derive all expected values from `site.config.js` at runtime — no test changes needed when content changes.
+
+### Usage
+
+```yaml
+# .github/workflows/build.yml
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    # ... your existing build job ...
+
+  site-test:
+    uses: doublewolfconsulting/workflows/.github/workflows/site-test.yml@main
+    permissions:
+      contents: read
+```
+
+No inputs or secrets required.
+
+### What it tests
+
+| Check | Detail |
+|---|---|
+| All pages load | HTTP status < 400, no JS console errors |
+| Service cards | Count matches `cfg.services.length` |
+| Client logos | Count matches `cfg.clients.length` |
+| Testimonials | Count matches `cfg.testimonials.length` |
+| Partner logos | Count matches `cfg.partners.length` |
+| Hero headline | `h1` text contains `cfg.pages.home.heroHeadline` |
+| Contact form | At least one `<form>` present on homepage |
+| FAQ items | Count matches `cfg.faqs.length` |
+| FAQ accordion | First item expands on click (`aria-expanded` becomes `"true"`) |
+
+### How it stays zero-maintenance
+
+The script reads `site.config.js` from the calling repo at runtime and derives all expected counts and text from it. Adding a service, changing FAQ count, or swapping a client logo requires no test changes.
+
+Selectors use `data-testid` attributes stamped by `build.js` generators. These survive CSS refactors. If a `data-testid` is missing, the failure message names the exact generator to fix.
+
+### Setup requirements in the calling repo
+
+Each generated element in `build.js` must carry a `data-testid` attribute:
+
+| Attribute | Generator |
+|---|---|
+| `data-testid="service-card"` | `generateServicesHTML` |
+| `data-testid="client-logo"` | `generateClientLogosHTML` |
+| `data-testid="testimonial-card"` | `generateTestimonialsHTML` |
+| `data-testid="partner-logo"` | `generatePartnerLogosHTML` |
+| `data-testid="faq-item"` | `generateFaqItemsHTML` |
+
+If you add a new section, add its `data-testid` to the generator and a count assertion in `scripts/site-test.mjs`.
+
+### Internals
+
+Checks out both the caller's repo and this workflows repo into `_wf/`. Builds the caller's site with `npm run build`, serves `dist/` on port 3000 via Python's built-in HTTP server, then runs `scripts/site-test.mjs`.
+
+---
+
 ## Index Notify
 
 **File:** `.github/workflows/index-notify.yml`
