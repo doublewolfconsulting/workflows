@@ -111,21 +111,21 @@ No inputs or secrets required.
 
 | Check | Detail |
 |---|---|
-| All pages load | HTTP status < 400, no JS console errors |
-| Content section counts | Each generated section matches the count declared in `site.config.js` |
-| Hero headline | `h1` text matches config |
-| Contact form | At least one `<form>` present on homepage |
-| FAQ accordion | First item expands on click |
+| All pages load | Every page declared in `site.config.js` returns HTTP < 400 with no JS console errors |
+| Generated section counts | Elements marked with `data-testid` are counted and matched against their corresponding config arrays — tests auto-update when config changes |
+| Hero headline | Page `h1` contains the headline value declared in config |
+| Contact form | At least one `<form>` is present on the homepage |
+| FAQ accordion | First FAQ item expands on click (`aria-expanded` becomes `"true"`) |
 
 ### How it stays zero-maintenance
 
-The script reads `site.config.js` from the calling repo at runtime and derives all expected counts and content from it. Changing config (adding a service, updating FAQ count, swapping a logo) requires no test changes.
+The script reads `site.config.js` at runtime and derives all expected values from it. Adding, removing, or changing content (services, FAQs, logos, copy) requires no changes to the tests — the counts and text expectations follow config automatically.
 
-Selectors use `data-testid` attributes on generated elements. These survive CSS refactors. Setup details and the full attribute list are documented in the calling repo's `CLAUDE.md`.
+Selectors use `data-testid` attributes on generated elements rather than CSS classes, so tests survive styling and layout changes. When a structural change breaks a test, the failure message identifies exactly which attribute is missing and where to add it.
 
-### Setup requirements in the calling repo
+### Setup requirements
 
-Generated HTML elements must carry `data-testid` attributes matching the selectors used in `scripts/site-test.mjs`. See the calling repo's `CLAUDE.md` for the full list.
+The calling repo must follow the `site.config.js` config convention and stamp `data-testid` attributes on generated HTML elements. See the calling repo's `CLAUDE.md` for the full attribute list and conventions.
 
 ### Internals
 
