@@ -136,20 +136,22 @@ async function testHomepage(browser) {
     `No <a href="${cfg.company.bookingUrl}"> found. Check that {{BOOKING_URL}} is replaced correctly in build.js.`
   );
 
-  // Nav anchor links resolve to elements on the page
-  const navAnchors = await page.locator('nav a[href^="#"]').all();
+  // Nav anchor links resolve to elements on the page.
+  // Matches href="#id" and href="/#id" (absolute path with hash fragment).
+  const navAnchors = await page.locator('nav a[href*="#"]').all();
   assert(
     navAnchors.length > 0,
     `Nav contains anchor links`,
-    'No <a href="#..."> found in <nav>. Check the navbar partial.'
+    'No <a href="...#..."> found in <nav>. Check the navbar partial.'
   );
   for (const link of navAnchors) {
     const href = await link.getAttribute('href');
-    const id = href.slice(1);
+    const id = href.split('#')[1];
+    if (!id) continue; // skip bare # hrefs
     const targetCount = await page.locator(`#${id}`).count();
     assert(
       targetCount > 0,
-      `Nav anchor ${href} resolves to an element on the page`,
+      `Nav anchor #${id} resolves to an element on the page`,
       `No element with id="${id}" found. Check that the section with that ID exists in the page HTML.`
     );
   }
