@@ -129,17 +129,7 @@ Selectors use `data-testid` attributes stamped by `build.js` generators. These s
 
 ### Setup requirements in the calling repo
 
-Each generated element in `build.js` must carry a `data-testid` attribute:
-
-| Attribute | Generator |
-|---|---|
-| `data-testid="service-card"` | `generateServicesHTML` |
-| `data-testid="client-logo"` | `generateClientLogosHTML` |
-| `data-testid="testimonial-card"` | `generateTestimonialsHTML` |
-| `data-testid="partner-logo"` | `generatePartnerLogosHTML` |
-| `data-testid="faq-item"` | `generateFaqItemsHTML` |
-
-If you add a new section, add its `data-testid` to the generator and a count assertion in `scripts/site-test.mjs`.
+Generated HTML elements must carry `data-testid` attributes matching the selectors used in `scripts/site-test.mjs`. The expected attributes and their corresponding config arrays are documented in the calling repo's `CLAUDE.md`.
 
 ### Internals
 
