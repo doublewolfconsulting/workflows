@@ -83,9 +83,12 @@ async function fetchPSI(strategy, attempt) {
     '?url=' + encodeURIComponent(SITE_URL) + '&strategy=' + strategy +
     (GOOGLE_PSI_API_KEY ? '&key=' + GOOGLE_PSI_API_KEY : '');
   const res = await fetch(url);
-  if (res.status === 429 && attempt < 4) {
+  // Retry on 429 (rate limit) and 400/5xx (transient API failures).
+  // Google's PSI API returns 400 when it cannot queue the analysis for a strategy,
+  // which happens transiently under load — not just for bad requests.
+  if ((res.status === 429 || res.status === 400 || res.status >= 500) && attempt < 4) {
     const wait = attempt * 15000;
-    console.log('PSI rate limited (' + strategy + '), retrying in ' + (wait / 1000) + 's...');
+    console.log('PSI API ' + res.status + ' for ' + strategy + ', retrying in ' + (wait / 1000) + 's...');
     await sleep(wait);
     return fetchPSI(strategy, attempt + 1);
   }
