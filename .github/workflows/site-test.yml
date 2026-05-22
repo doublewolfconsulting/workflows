@@ -52,4 +52,7 @@ jobs:
           done
 
       - name: Run site tests
-        run: node _wf/scripts/site-test.mjs
+        # NODE_PATH makes Playwright (managed here) available to the caller's test script
+        run: node scripts/site-test.mjs
+        env:
+          NODE_PATH: _wf/node_modules

@@ -84,7 +84,18 @@ The workflow checks out both the caller's repo (for context files and git operat
 
 **File:** `.github/workflows/site-test.yml`
 
-Builds the caller's site, serves `dist/` locally, and runs functional tests against it on every PR. Tests derive all expected values from `site.config.js` at runtime — no test changes needed when content changes.
+Provides the build environment and Playwright harness for running a site's own test script on every PR. The test logic lives in the calling repo at `scripts/site-test.mjs` — this workflow just handles the infrastructure.
+
+### What it does
+
+1. Checks out the calling repo
+2. Sets up Node 24 with caching
+3. Installs calling repo dependencies and Playwright (Chromium)
+4. Runs `npm run build`
+5. Serves `dist/` on port 3000 via `npx serve` (handles extensionless URLs)
+6. Runs `scripts/site-test.mjs` from the calling repo, with Playwright resolved from this workflow's `node_modules` via `NODE_PATH`
+
+The calling repo owns all test logic. Fork the site, customise the test script, get the infrastructure for free.
 
 ### Usage
 
@@ -107,32 +118,9 @@ jobs:
 
 No inputs or secrets required.
 
-### What it tests
-
-| Check | Detail |
-|---|---|
-| All pages load | Every page declared in `site.config.js` returns HTTP < 400 with no JS console errors |
-| No unreplaced placeholders | Rendered HTML is scanned for `{{` tokens — catches missed build-time replacements before they reach production |
-| Generated section counts | Elements marked with `data-testid` are counted and matched against their corresponding config arrays — auto-updates when config changes |
-| Hero headline | Page `h1` contains the headline value declared in config |
-| Booking URL link | At least one link with the booking URL from config is present on the homepage |
-| Nav anchor links | Every `<a href="#...">` in the navbar resolves to an element that exists on the page |
-| Contact form | At least one `<form>` is present on the homepage |
-| FAQ accordion | First FAQ item expands on click (`aria-expanded` becomes `"true"`) |
-
-### How it stays zero-maintenance
-
-The script reads `site.config.js` at runtime and derives all expected values from it. Adding, removing, or changing content (services, FAQs, logos, copy) requires no changes to the tests — the counts and text expectations follow config automatically.
-
-Selectors use `data-testid` attributes on generated elements rather than CSS classes, so tests survive styling and layout changes. When a structural change breaks a test, the failure message identifies exactly which attribute is missing and where to add it.
-
 ### Setup requirements
 
-The calling repo must follow the `site.config.js` config convention and stamp `data-testid` attributes on generated HTML elements. See the calling repo's `CLAUDE.md` for the full attribute list and conventions.
-
-### Internals
-
-Checks out both the caller's repo and this workflows repo into `_wf/`. Builds the caller's site with `npm run build`, serves `dist/` on port 3000 via Python's built-in HTTP server, then runs `scripts/site-test.mjs`.
+The calling repo must have `scripts/site-test.mjs` — a Node.js ESM script that tests the built site served on `http://localhost:3000`. Import `playwright` directly; it is provided via `NODE_PATH` at runtime without needing to be declared as a dependency in the calling repo.
 
 ---
 
