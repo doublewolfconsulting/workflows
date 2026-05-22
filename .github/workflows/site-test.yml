@@ -10,14 +10,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4          # caller's repo
+      - uses: actions/checkout@v5          # caller's repo
 
-      - uses: actions/checkout@v4          # workflows repo (script + playwright)
+      - uses: actions/checkout@v5          # workflows repo (script + playwright)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm
@@ -40,7 +40,9 @@ jobs:
         run: npm run build
 
       - name: Serve dist
-        run: python3 -m http.server 3000 --directory dist &
+        # npx serve handles extensionless URLs (serves faq.html for /faq).
+        # Python's http.server does not, causing 404s on extensionless routes.
+        run: npx serve@14 dist -p 3000 --no-clipboard &
 
       - name: Wait for server
         run: |
