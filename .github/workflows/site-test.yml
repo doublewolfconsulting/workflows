@@ -1,0 +1,53 @@
+name: Site Test
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4          # caller's repo
+
+      - uses: actions/checkout@v4          # workflows repo (script + playwright)
+        with:
+          repository: doublewolfconsulting/workflows
+          path: _wf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            _wf/package-lock.json
+
+      - name: Install caller dependencies
+        run: npm ci
+
+      - name: Install workflow dependencies
+        run: npm ci
+        working-directory: _wf
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: _wf
+
+      - name: Build site
+        run: npm run build
+
+      - name: Serve dist
+        run: python3 -m http.server 3000 --directory dist &
+
+      - name: Wait for server
+        run: |
+          for i in $(seq 1 15); do
+            curl -sf http://localhost:3000 > /dev/null && echo "Server ready" && break
+            sleep 1
+          done
+
+      - name: Run site tests
+        run: node _wf/scripts/site-test.mjs
