@@ -112,24 +112,20 @@ No inputs or secrets required.
 | Check | Detail |
 |---|---|
 | All pages load | HTTP status < 400, no JS console errors |
-| Service cards | Count matches `cfg.services.length` |
-| Client logos | Count matches `cfg.clients.length` |
-| Testimonials | Count matches `cfg.testimonials.length` |
-| Partner logos | Count matches `cfg.partners.length` |
-| Hero headline | `h1` text contains `cfg.pages.home.heroHeadline` |
+| Content section counts | Each generated section matches the count declared in `site.config.js` |
+| Hero headline | `h1` text matches config |
 | Contact form | At least one `<form>` present on homepage |
-| FAQ items | Count matches `cfg.faqs.length` |
-| FAQ accordion | First item expands on click (`aria-expanded` becomes `"true"`) |
+| FAQ accordion | First item expands on click |
 
 ### How it stays zero-maintenance
 
-The script reads `site.config.js` from the calling repo at runtime and derives all expected counts and text from it. Adding a service, changing FAQ count, or swapping a client logo requires no test changes.
+The script reads `site.config.js` from the calling repo at runtime and derives all expected counts and content from it. Changing config (adding a service, updating FAQ count, swapping a logo) requires no test changes.
 
-Selectors use `data-testid` attributes stamped by `build.js` generators. These survive CSS refactors. If a `data-testid` is missing, the failure message names the exact generator to fix.
+Selectors use `data-testid` attributes on generated elements. These survive CSS refactors. Setup details and the full attribute list are documented in the calling repo's `CLAUDE.md`.
 
 ### Setup requirements in the calling repo
 
-Generated HTML elements must carry `data-testid` attributes matching the selectors used in `scripts/site-test.mjs`. The expected attributes and their corresponding config arrays are documented in the calling repo's `CLAUDE.md`.
+Generated HTML elements must carry `data-testid` attributes matching the selectors used in `scripts/site-test.mjs`. See the calling repo's `CLAUDE.md` for the full list.
 
 ### Internals
 
