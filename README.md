@@ -112,8 +112,11 @@ No inputs or secrets required.
 | Check | Detail |
 |---|---|
 | All pages load | Every page declared in `site.config.js` returns HTTP < 400 with no JS console errors |
-| Generated section counts | Elements marked with `data-testid` are counted and matched against their corresponding config arrays — tests auto-update when config changes |
+| No unreplaced placeholders | Rendered HTML is scanned for `{{` tokens — catches missed build-time replacements before they reach production |
+| Generated section counts | Elements marked with `data-testid` are counted and matched against their corresponding config arrays — auto-updates when config changes |
 | Hero headline | Page `h1` contains the headline value declared in config |
+| Booking URL link | At least one link with the booking URL from config is present on the homepage |
+| Nav anchor links | Every `<a href="#...">` in the navbar resolves to an element that exists on the page |
 | Contact form | At least one `<form>` is present on the homepage |
 | FAQ accordion | First FAQ item expands on click (`aria-expanded` becomes `"true"`) |
 

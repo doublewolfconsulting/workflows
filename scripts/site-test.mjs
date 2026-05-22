@@ -4,15 +4,15 @@
  *
  * Runs after `npm run build` in the caller repo, with dist/ served on localhost:3000.
  * Reads site.config.js from the caller repo to derive expected counts and content.
- * Uses data-testid attributes stamped by build.js generators for stable selectors.
- *
- * Failure messages tell you exactly which generator in build.js to update if a
- * data-testid attribute is missing or a structural change broke a test.
+ * Uses data-testid attributes on generated elements for stable selectors.
  *
  * Tests:
  *   All pages  — loads without 4xx/5xx, no JS console errors
+ *              — no unreplaced {{PLACEHOLDER}} tokens in rendered HTML
  *   Homepage   — section counts match config (services, clients, testimonials, partners)
  *              — hero h1 contains heroHeadline text
+ *              — booking URL link present
+ *              — nav anchor links resolve to elements on the page
  *              — contact form is present
  *   FAQ page   — item count matches config
  *              — accordion opens on click (aria-expanded becomes "true")
@@ -53,14 +53,15 @@ function assert(condition, label, detail) {
   }
 }
 
-async function assertCount(page, selector, expected, sectionLabel, generatorHint) {
+async function assertCount(page, selector, expected, sectionLabel) {
   const actual = await page.locator(selector).count();
+  const attr = selector.match(/data-testid="([^"]+)"/)?.[1] || selector;
   assert(
     actual === expected,
     `${sectionLabel}: found ${actual} of ${expected} expected element(s)`,
     actual === 0
-      ? `Selector "${selector}" matched nothing. Add data-testid="${selector.replace(/.*data-testid="([^"]+)".*/, '$1')}" to each item in ${generatorHint} in scripts/build.js.`
-      : `Count mismatch. If you changed the number of items in site.config.js this should auto-pass. Check that every item in ${generatorHint} renders the attribute.`
+      ? `No elements matched ${selector}. Check that data-testid="${attr}" is present on each generated item.`
+      : `Count mismatch. If you updated site.config.js this should auto-pass. Check that every generated item carries the attribute.`
   );
 }
 
@@ -97,6 +98,14 @@ async function loadPage(browser, url, label) {
     consoleErrors.length > 0 ? consoleErrors.slice(0, 3).join(' | ') : undefined
   );
 
+  // Check for unreplaced placeholders — catches missed build.js replacements silently
+  const html = await page.content();
+  assert(
+    !html.includes('{{'),
+    `${label}: no unreplaced placeholders in HTML`,
+    'Found "{{" in rendered HTML. A placeholder was not replaced at build time. Check build.js and site.config.js.'
+  );
+
   return page;
 }
 
@@ -106,22 +115,10 @@ async function testHomepage(browser) {
   const page = await loadPage(browser, `${BASE}/`, 'Homepage');
   if (!page) return;
 
-  await assertCount(
-    page, '[data-testid="service-card"]', cfg.services.length,
-    'Services section', 'generateServicesHTML'
-  );
-  await assertCount(
-    page, '[data-testid="client-logo"]', cfg.clients.length,
-    'Client logos', 'generateClientLogosHTML'
-  );
-  await assertCount(
-    page, '[data-testid="testimonial-card"]', cfg.testimonials.length,
-    'Testimonials', 'generateTestimonialsHTML'
-  );
-  await assertCount(
-    page, '[data-testid="partner-logo"]', cfg.partners.length,
-    'Partner logos', 'generatePartnerLogosHTML'
-  );
+  await assertCount(page, '[data-testid="service-card"]',    cfg.services.length,             'Services section');
+  await assertCount(page, '[data-testid="client-logo"]',     cfg.clients.length,              'Client logos');
+  await assertCount(page, '[data-testid="testimonial-card"]',cfg.testimonials.length,         'Testimonials');
+  await assertCount(page, '[data-testid="partner-logo"]',    (cfg.partners || []).length,     'Partner logos');
 
   // Hero headline
   const h1Text = await page.locator('h1').first().textContent().catch(() => '');
@@ -131,12 +128,38 @@ async function testHomepage(browser) {
     `Expected "${cfg.pages.home.heroHeadline}" in h1, got "${h1Text.trim().slice(0, 80)}"`
   );
 
+  // Booking URL link
+  const bookingLinks = await page.locator(`a[href="${cfg.company.bookingUrl}"]`).count();
+  assert(
+    bookingLinks > 0,
+    `Booking URL link present`,
+    `No <a href="${cfg.company.bookingUrl}"> found. Check that {{BOOKING_URL}} is replaced correctly in build.js.`
+  );
+
+  // Nav anchor links resolve to elements on the page
+  const navAnchors = await page.locator('nav a[href^="#"]').all();
+  assert(
+    navAnchors.length > 0,
+    `Nav contains anchor links`,
+    'No <a href="#..."> found in <nav>. Check the navbar partial.'
+  );
+  for (const link of navAnchors) {
+    const href = await link.getAttribute('href');
+    const id = href.slice(1);
+    const targetCount = await page.locator(`#${id}`).count();
+    assert(
+      targetCount > 0,
+      `Nav anchor ${href} resolves to an element on the page`,
+      `No element with id="${id}" found. Check that the section with that ID exists in the page HTML.`
+    );
+  }
+
   // Contact form
   const formCount = await page.locator('form').count();
   assert(
     formCount > 0,
     `Contact form is present`,
-    'No <form> element found on homepage. Check src/index.html contact section.'
+    'No <form> element found on homepage. Check the contact section HTML.'
   );
 
   await page.close();
@@ -148,17 +171,14 @@ async function testFaq(browser) {
   const page = await loadPage(browser, `${BASE}/faq`, 'FAQ page');
   if (!page) return;
 
-  await assertCount(
-    page, '[data-testid="faq-item"]', cfg.faqs.length,
-    'FAQ items', 'generateFaqItemsHTML'
-  );
+  await assertCount(page, '[data-testid="faq-item"]', cfg.faqs.length, 'FAQ items');
 
   // Accordion: click first trigger, panel should expand
   const firstTrigger = page.locator('[data-testid="faq-item"] button.faq-trigger').first();
   const triggerCount = await firstTrigger.count();
   if (triggerCount === 0) {
     assert(false, 'FAQ accordion: trigger button found',
-      'No button.faq-trigger found inside [data-testid="faq-item"]. Check generateFaqItemsHTML in build.js and the .faq-trigger class in main.js.');
+      'No button.faq-trigger found inside [data-testid="faq-item"]. Check that the FAQ trigger button has class "faq-trigger" and the accordion JS targets that class.');
   } else {
     await firstTrigger.click();
     await page.waitForTimeout(400); // allow CSS grid transition to complete
@@ -167,7 +187,7 @@ async function testFaq(browser) {
     assert(
       ariaExpanded === 'true',
       'FAQ accordion: first item expands on click',
-      `aria-expanded is "${ariaExpanded}" after click (expected "true"). Check the FAQ accordion toggle in scripts/main.js.`
+      `aria-expanded is "${ariaExpanded}" after click (expected "true"). Check the FAQ accordion toggle in the site JS.`
     );
   }
 
