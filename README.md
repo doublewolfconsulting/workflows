@@ -84,7 +84,7 @@ The workflow checks out both the caller's repo (for context files and git operat
 
 **File:** `.github/workflows/site-test.yml`
 
-Provides the build environment and Playwright harness for running a site's own test script on every PR. The test logic lives in the calling repo at `scripts/site-test.mjs` — this workflow just handles the infrastructure.
+Provides the build environment and Playwright harness for running a site's own test script on every PR. The test logic lives in the calling repo at `scripts/site-test.mjs`; this workflow handles the infrastructure.
 
 ### What it does
 
@@ -120,7 +120,7 @@ No inputs or secrets required.
 
 ### Setup requirements
 
-The calling repo must have `scripts/site-test.mjs` — a Node.js ESM script that tests the built site served on `http://localhost:3000`. Import `playwright` directly; it is provided via `NODE_PATH` at runtime without needing to be declared as a dependency in the calling repo.
+The calling repo must have `scripts/site-test.mjs`, a Node.js script that tests the built site served on `http://localhost:3000`. Import `playwright` via `createRequire` (not ESM `import`); it is resolved from the workflows repo's `node_modules` via `NODE_PATH` at runtime without needing to be declared as a dependency in the calling repo.
 
 ---
 
