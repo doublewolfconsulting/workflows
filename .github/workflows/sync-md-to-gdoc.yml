@@ -26,14 +26,15 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4          # caller's repo (markdown source)
+      - uses: actions/checkout@v5          # caller's repo (markdown source)
 
-      - uses: actions/checkout@v4          # this workflows repo (Python scripts)
+      - uses: actions/checkout@v5          # this workflows repo (Python scripts)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
@@ -62,7 +63,7 @@ jobs:
           fi
 
       - name: Install Python dependencies
-        run: pip install google-auth google-api-python-client lxml
+        run: pip install --quiet google-auth==2.40.0 google-api-python-client==2.166.0 lxml==5.4.0
 
       - name: Post-process DOCX
         run: python3 _wf/scripts/sync_gdoc_postprocess.py
