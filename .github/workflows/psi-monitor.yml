@@ -38,15 +38,16 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4          # caller's repo (context files + git for auto-fix PRs)
+      - uses: actions/checkout@v5          # caller's repo (context files + git for auto-fix PRs)
 
-      - uses: actions/checkout@v4          # this workflows repo (script + deps)
+      - uses: actions/checkout@v5          # this workflows repo (script + deps)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
           cache: npm

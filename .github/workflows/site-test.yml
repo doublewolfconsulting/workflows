@@ -9,6 +9,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5          # caller's repo
 
@@ -40,9 +41,12 @@ jobs:
         run: npm run build
 
       - name: Serve dist
-        # npx serve handles extensionless URLs (serves faq.html for /faq).
+        # serve is managed by this workflow (in _wf/node_modules) so callers
+        # do not need it in their own package.json. Direct binary path avoids
+        # the npx install-on-demand overhead and warning.
+        # serve handles extensionless URLs (serves faq.html for /faq);
         # Python's http.server does not, causing 404s on extensionless routes.
-        run: npx serve@14 dist -p 3000 --no-clipboard &
+        run: _wf/node_modules/.bin/serve dist -p 3000 --no-clipboard &
 
       - name: Wait for server
         run: |
