@@ -225,10 +225,10 @@ jobs:
     with:
       md_file: docs/prd.md
       reference_doc: docs/template.docx  # optional
+      google_doc_id: "YOUR_GOOGLE_DOC_ID"
     secrets:
       WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
       SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
-      GOOGLE_DOC_ID: ${{ secrets.GOOGLE_DOC_ID }}
 ```
 
 ### Inputs
@@ -237,6 +237,7 @@ jobs:
 |-------|----------|-------------|
 | `md_file` | Yes | Path to the Markdown file in your repo (e.g. `docs/prd.md`) |
 | `reference_doc` | No | Path to a `.docx` template for Pandoc styling |
+| `google_doc_id` | Yes | The file ID from the Google Doc URL |
 
 ### Secrets
 
@@ -244,12 +245,11 @@ jobs:
 |--------|-------------|
 | `WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Federation provider resource name |
 | `SERVICE_ACCOUNT_EMAIL` | Google service account email |
-| `GOOGLE_DOC_ID` | The file ID from the Google Doc URL |
 
 ### Setup
 
-1. **Google Doc**: create the Doc and copy its file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`). Add it as `GOOGLE_DOC_ID`.
+1. **Google Doc**: create the Doc and share it with the service account (Editor). Copy the file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`) and pass it as the `google_doc_id` input directly in your workflow file. No secret needed.
 
-2. **Google Cloud service account**: create a service account in Google Cloud, share the Google Doc with it (Editor), and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
+2. **Google Cloud service account**: create a service account in Google Cloud and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
 
 3. **Permissions**: the calling workflow needs `id-token: write` and `contents: read`. These are set automatically by this workflow, but your repo's Actions settings must allow it.
