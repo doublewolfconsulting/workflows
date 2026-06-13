@@ -2,6 +2,8 @@
 
 A collection of reusable GitHub Actions workflows.
 
+Dependabot is configured to open weekly PRs for npm and GitHub Actions version bumps.
+
 ---
 
 ## PSI Monitor
@@ -89,11 +91,13 @@ Provides the build environment and Playwright harness for running a site's own t
 ### What it does
 
 1. Checks out the calling repo
-2. Sets up Node 24 with caching
-3. Installs calling repo dependencies and Playwright (Chromium)
-4. Runs `npm run build`
-5. Serves `dist/` on port 3000 via `npx serve` (handles extensionless URLs)
-6. Runs `scripts/site-test.mjs` from the calling repo, with Playwright resolved from this workflow's `node_modules` via `NODE_PATH`
+2. Sets up Node 24 with npm caching
+3. Installs calling repo and workflow dependencies
+4. Restores the Playwright Chromium binary from cache (keyed on `_wf/package-lock.json`); downloads and extracts only on a cache miss
+5. Installs Playwright system dependencies (`install-deps`) — always runs, not cached
+6. Runs `npm run build`
+7. Serves `dist/` on port 3000 via `npx serve` (handles extensionless URLs)
+8. Runs `scripts/site-test.mjs` from the calling repo, with Playwright resolved from this workflow's `node_modules` via `NODE_PATH`
 
 The calling repo owns all test logic. Fork the site, customise the test script, get the infrastructure for free.
 
