@@ -34,8 +34,14 @@ jobs:
         working-directory: _wf
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
         working-directory: _wf
+
+      - name: Install Playwright system dependencies
+        run: npx playwright install-deps chromium
+        working-directory: _wf
+        env:
+          DEBIAN_FRONTEND: noninteractive
 
       - name: Build site
         run: npm run build
