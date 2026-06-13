@@ -78,7 +78,7 @@ The failing checks are passed to `claude-sonnet-4-6` alongside the files listed 
 
 #### Internals
 
-The workflow checks out both the caller's repo (for context files and git operations) and this workflows repo (for the script and its dependencies) into a `_wf/` subfolder. No script or `package.json` is needed in the calling repo.
+The workflow checks out both the caller's repo (for context files and git operations) and this workflows repo (for the script and its dependencies) into a `_wf/` subfolder. No script or `package.json` is needed in the calling repo. The Playwright Chromium binary is cached between runs (keyed on `_wf/package-lock.json`) and only downloaded and extracted on a cache miss.
 
 ---
 
