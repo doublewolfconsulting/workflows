@@ -40,9 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5          # caller's repo (context files + git for auto-fix PRs)
+      - uses: actions/checkout@v6          # caller's repo (context files + git for auto-fix PRs)
 
-      - uses: actions/checkout@v5          # this workflows repo (script + deps)
+      - uses: actions/checkout@v6          # this workflows repo (script + deps)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf

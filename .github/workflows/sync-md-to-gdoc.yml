@@ -33,9 +33,9 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v5          # caller's repo (markdown source)
+      - uses: actions/checkout@v6          # caller's repo (markdown source)
 
-      - uses: actions/checkout@v5          # this workflows repo (Python scripts)
+      - uses: actions/checkout@v6          # this workflows repo (Python scripts)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
