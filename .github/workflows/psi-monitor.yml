@@ -47,7 +47,7 @@ jobs:
           repository: doublewolfconsulting/workflows
           path: _wf
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
