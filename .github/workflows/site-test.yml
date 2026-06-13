@@ -33,13 +33,23 @@ jobs:
         run: npm ci
         working-directory: _wf
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('_wf/package-lock.json') }}
+
       - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
         working-directory: _wf
+        timeout-minutes: 2
 
       - name: Install Playwright system dependencies
         run: npx playwright install-deps chromium
         working-directory: _wf
+        timeout-minutes: 2
         env:
           DEBIAN_FRONTEND: noninteractive
 

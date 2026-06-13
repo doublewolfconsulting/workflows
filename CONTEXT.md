@@ -47,20 +47,32 @@ The test script already reads it at runtime (`cfg`). Before adding anything, ver
 
 ## Completed tasks
 
-### Task 1 — Fix Playwright browser install timeout (done 2026-06-13)
+### Task 1 — Fix Playwright browser install timeout (done 2026-06-13, revised 2026-06-13)
 
-**Branch:** `claude/playwright-install-timeout-jh762g`
-**Problem:** `npx playwright install --with-deps chromium` hung after browser download
-because `apt-get install` ran interactively, causing the 15-minute job timeout.
-**Fix:** Split into two steps in `.github/workflows/site-test.yml`:
+**Problem (revised):** The hang is in the post-download extraction/verification phase of
+`npx playwright install chromium` itself — not in `--with-deps` / apt-get. The 170 MB
+download completes in ~1s, then extraction hangs for exactly 15 minutes until job timeout.
+**Fix:** Add browser caching keyed on `_wf/package-lock.json` (Playwright version) so
+extraction only happens once. Skip the install step on cache hit. Add `timeout-minutes: 2`
+on both browser and deps steps as a safety net.
 ```yaml
+- name: Cache Playwright browsers
+  uses: actions/cache@v4
+  id: playwright-cache
+  with:
+    path: ~/.cache/ms-playwright
+    key: playwright-${{ hashFiles('_wf/package-lock.json') }}
+
 - name: Install Playwright browser
+  if: steps.playwright-cache.outputs.cache-hit != 'true'
   run: npx playwright install chromium
   working-directory: _wf
+  timeout-minutes: 2
 
 - name: Install Playwright system dependencies
   run: npx playwright install-deps chromium
   working-directory: _wf
+  timeout-minutes: 2
   env:
     DEBIAN_FRONTEND: noninteractive
 ```
