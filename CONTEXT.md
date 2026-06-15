@@ -18,34 +18,23 @@ and shared scripts. The primary consumer is `doublewolfconsulting/consulting.dou
 
 ## Pending tasks
 
-### Task 2 — Add layout structure tests to the static site
-
-**File:** `scripts/site-test.mjs` in `doublewolfconsulting/consulting.doublewolf-static`
-(not in this repo — that script lives in the caller's repo)
-
-**Context:** `consulting.doublewolf-static` has a `site.config.js` with a layout config.
-The test script already reads it at runtime (`cfg`). Before adding anything, verify whether
-`testOtherPages` already asserts HTTP 200 for all `cfg.pages` entries — do not duplicate.
-
-**Tests to add** (for every page in `cfg.pages`):
-
-1. `<body data-page="X">` matches `page.layout.dataPage`
-2. `<main>` contains `cfg.layout.innerPage.mainClass` as a class (skip homepage)
-3. `<h1>` contains `cfg.layout.innerPage.h1Class` as a class (skip homepage)
-4. Breadcrumb `<nav aria-label="Breadcrumb">` is present if `page.layout.hasBreadcrumb`, absent if not
-5. Breadcrumb item count equals `page.layout.breadcrumbDepth`
-   (count `<li>` elements containing an `<a>` or `<span>`, not SVG separators)
-6. For pages where `page.layout.h2s` is non-empty:
-   each string in `h2s` appears somewhere in the page HTML
-7. For `/now` specifically:
-   JSON-LD `<script type="application/ld+json">` contains a `BreadcrumbList` with exactly
-   3 `ListItem` entries, with `item` values ending in `/`, `/about`, and `/now`
-
-**Why:** `cfg.layout.innerPage` holds ground-truth class strings for all inner pages.
-`cfg.pages[key].layout` is the per-page structural spec. The `/now` page has a unique
-3-item breadcrumb (Home > About > Now) so it gets an explicit JSON-LD check.
+None.
 
 ## Completed tasks
+
+### Task 2 — Add layout structure tests to the static site (done 2026-06-15)
+
+**File:** `scripts/site-test.mjs` in `doublewolfconsulting/consulting.doublewolf-static`
+(lives in the caller's repo, not here)
+
+Added `testLayout(page, key)` and `testNowJsonLd(page)` helpers. Called from
+`testHomepage`, `testFaq`, `testAbout`, and `testOtherPages`. Tests:
+
+1. `<body data-page="X">` matches `page.layout.dataPage` (all pages)
+2. `<main>` and `<h1>` carry canonical class strings from `cfg.layout.innerPage` (inner pages only)
+3. Breadcrumb nav present/absent and correct depth per `page.layout.hasBreadcrumb` / `breadcrumbDepth`
+4. h2 section headings present for pages with `page.layout.h2s` defined (currently `/now`)
+5. `/now`: JSON-LD BreadcrumbList has exactly 3 items ending in `/`, `/about`, `/now`
 
 ### Task 1 — Fix Playwright browser install timeout (done 2026-06-13, revised 2026-06-13)
 
