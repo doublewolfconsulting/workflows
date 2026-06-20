@@ -2,6 +2,11 @@ name: Site Test
 
 on:
   workflow_call:
+    inputs:
+      working_directory:
+        description: 'Path to website source relative to repo root'
+        type: string
+        default: '.'
 
 permissions:
   contents: read
@@ -23,11 +28,12 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: |
-            package-lock.json
+            ${{ inputs.working_directory }}/package-lock.json
             _wf/package-lock.json
 
       - name: Install caller dependencies
         run: npm ci
+        working-directory: ${{ inputs.working_directory }}
 
       - name: Install workflow dependencies
         run: npm ci
@@ -55,6 +61,7 @@ jobs:
 
       - name: Build site
         run: npm run build
+        working-directory: ${{ inputs.working_directory }}
 
       - name: Serve dist
         # serve is managed by this workflow (in _wf/node_modules) so callers
@@ -62,7 +69,8 @@ jobs:
         # the npx install-on-demand overhead and warning.
         # serve handles extensionless URLs (serves faq.html for /faq);
         # Python's http.server does not, causing 404s on extensionless routes.
-        run: _wf/node_modules/.bin/serve dist -p 3000 --no-clipboard &
+        run: ${{ github.workspace }}/_wf/node_modules/.bin/serve dist -p 3000 --no-clipboard &
+        working-directory: ${{ inputs.working_directory }}
 
       - name: Wait for server
         run: |
@@ -74,5 +82,6 @@ jobs:
       - name: Run site tests
         # NODE_PATH makes Playwright (managed here) available to the caller's test script
         run: node scripts/site-test.mjs
+        working-directory: ${{ inputs.working_directory }}
         env:
-          NODE_PATH: _wf/node_modules
+          NODE_PATH: ${{ github.workspace }}/_wf/node_modules
