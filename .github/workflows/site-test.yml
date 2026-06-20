@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6          # caller's repo
+      - uses: actions/checkout@v7          # caller's repo
 
-      - uses: actions/checkout@v6          # workflows repo (script + playwright)
+      - uses: actions/checkout@v7          # workflows repo (script + playwright)
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
