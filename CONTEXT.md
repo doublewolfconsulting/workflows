@@ -22,6 +22,17 @@ None.
 
 ## Completed tasks
 
+### Task 3 — Add working_directory input to site-test reusable workflow (done 2026-06-20, PR #24)
+
+**Problem:** Callers with website source not at repo root (e.g. Mash at `Deliverables/Website/`)
+could not use the workflow — passing `working_directory` input caused a validation error:
+`working_directory is not defined in the referenced workflow`.
+
+**Fix:** Added `inputs.working_directory` (type: string, default: `.`) to the `workflow_call`
+trigger. All caller-repo steps now use `working-directory: ${{ inputs.working_directory }}`.
+The `serve` binary path and `NODE_PATH` use `${{ github.workspace }}` absolute paths so they
+resolve correctly regardless of working directory.
+
 ### Task 2 — Add layout structure tests to the static site (done 2026-06-15)
 
 **File:** `scripts/site-test.mjs` in `doublewolfconsulting/consulting.doublewolf-static`
