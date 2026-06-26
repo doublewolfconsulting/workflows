@@ -201,6 +201,72 @@ For emergency manual submission without a full deploy, trigger via the GitHub Ac
 
 ---
 
+## Template Sync
+
+**File:** `.github/workflows/template-sync.yml`
+
+Runs monthly: compares a client site against the `doublewolfconsulting/consulting.doublewolf-static` template. Uses Claude to produce a structured gap analysis, auto-applies high-confidence mechanical changes as individual PRs, and opens a `template-sync` labelled issue in the client repo with the full report.
+
+### Usage
+
+Add this file to the client repo:
+
+```yaml
+# .github/workflows/template-sync.yml
+name: Template sync check
+on:
+  schedule:
+    - cron: '0 1 1 * *'  # 1st of every month at 09:00 SGT (01:00 UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    uses: doublewolfconsulting/workflows/.github/workflows/template-sync.yml@main
+    with:
+      client_repo: your-org/your-client-repo
+      working_directory: Deliverables/Website  # omit or set to '.' if site is at repo root
+    secrets: inherit
+```
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `client_repo` | Yes | (none) | Client repo in `owner/name` format (e.g. `doublewolfconsulting/mash`) |
+| `working_directory` | No | `.` | Subdirectory of the client repo where the website lives. Use `.` or leave blank if the website is at the repo root. |
+| `template_repo` | No | `doublewolfconsulting/consulting.doublewolf-static` | Upstream template repo in `owner/name` format |
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `ANTHROPIC_API_KEY` | Must be added to the **client repo** secrets |
+| `GITHUB_TOKEN` | Provided automatically by GitHub Actions |
+
+### What it does
+
+1. Checks out the client repo, the template repo (`_template/`), and this workflows repo (`_wf/`)
+2. Reads four shared infrastructure files from each: `scripts/build.js`, `scripts/site-test.mjs`, `scripts/main.js`, `styles/input.css`
+3. Sends both sets of files to `claude-sonnet-4-6` for a gap analysis, asking it to identify changes that should flow template-to-client (bug fixes, improvements) and client-to-template (improvements the template should adopt)
+4. For high-confidence mechanical changes (single string replacement, build passes): applies the change, commits to a new branch (`sync/template-YYYYMM-N`), and opens a PR in the client repo
+5. Opens a `template-sync` labelled issue in the client repo with: summary, links to auto-generated PRs, manual review items, and port-back recommendations
+6. If any high-priority client-to-template improvements are found, also opens an issue in the template repo
+
+Claude is instructed to focus only on shared infrastructure (build pipeline, test assertions, CSS utilities) and to ignore client-specific content (brand colours, config values, page names, client-specific sections).
+
+### Setup
+
+1. Add `ANTHROPIC_API_KEY` as a secret in the client repo.
+2. Ensure the client repo's Actions settings allow creating PRs: **Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests**.
+3. Add the caller workflow file above. The workflow runs automatically on the 1st of every month and can be triggered manually via the GitHub Actions UI.
+
+---
+
 ## Sync Markdown to Google Doc
 
 **File:** `.github/workflows/sync-md-to-gdoc.yml`

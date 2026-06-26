@@ -1,0 +1,72 @@
+name: Template Sync
+
+on:
+  workflow_call:
+    inputs:
+      client_repo:
+        description: 'Client repo in owner/name format, e.g. doublewolfconsulting/mash'
+        required: true
+        type: string
+      working_directory:
+        description: 'Subdirectory of the client repo where the website lives (leave blank or use . for repo root)'
+        required: false
+        type: string
+        default: '.'
+      template_repo:
+        description: 'Upstream template repo in owner/name format'
+        required: false
+        type: string
+        default: 'doublewolfconsulting/consulting.doublewolf-static'
+    secrets:
+      ANTHROPIC_API_KEY:
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout client repo
+        uses: actions/checkout@v6
+
+      - name: Checkout template repo
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.template_repo }}
+          path: _template
+
+      - name: Checkout workflows repo
+        uses: actions/checkout@v6
+        with:
+          repository: doublewolfconsulting/workflows
+          path: _wf
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: _wf/package-lock.json
+
+      - name: Install workflow dependencies
+        run: npm ci
+        working-directory: _wf
+
+      - name: Configure git
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+
+      - name: Run template sync
+        run: node _wf/scripts/template-sync.mjs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLIENT_REPO: ${{ inputs.client_repo }}
+          CLIENT_DIR: ${{ github.workspace }}
+          CLIENT_WORKING_DIR: ${{ inputs.working_directory }}
+          TEMPLATE_DIR: ${{ github.workspace }}/_template

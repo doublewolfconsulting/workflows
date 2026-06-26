@@ -20,6 +20,20 @@ and shared scripts. The primary consumer is `doublewolfconsulting/consulting.dou
 
 None.
 
+## Recently completed
+
+### Template sync workflow (feat/template-sync-workflow, 2026-06-26)
+
+Added `scripts/template-sync.mjs` and `.github/workflows/template-sync.yml` — a reusable
+monthly workflow that compares a client site against `consulting.doublewolf-static`. Reads
+four shared infrastructure files, calls Claude for a gap analysis, auto-applies
+high-confidence changes (one branch + PR per change), and opens a `template-sync` labelled
+issue in the client repo. High-priority client-to-template improvements also open an issue in
+the template repo.
+
+Caller workflow added to `doublewolfconsulting/mash` at `.github/workflows/template-sync.yml`
+(runs 1st of every month at 09:00 SGT, `working_directory: Deliverables/Website`).
+
 ## Completed tasks
 
 ### Task 3 — Add working_directory input to site-test reusable workflow (done 2026-06-20, PR #24)
