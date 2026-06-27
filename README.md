@@ -205,7 +205,7 @@ For emergency manual submission without a full deploy, trigger via the GitHub Ac
 
 **File:** `.github/workflows/template-sync.yml`
 
-Runs monthly: compares a client site against the `doublewolfconsulting/consulting.doublewolf-static` template. Uses Claude to produce a structured gap analysis, auto-applies high-confidence mechanical changes as individual PRs, and opens a `template-sync` labelled issue in the client repo with the full report.
+Runs on a caller-defined schedule (quarterly recommended): compares a client site against the `doublewolfconsulting/consulting.doublewolf-static` template. Uses Claude to produce a structured gap analysis, auto-applies high-confidence mechanical changes as individual PRs, and opens a `template-sync` labelled issue in the client repo with the full report.
 
 ### Usage
 
@@ -216,7 +216,7 @@ Add this file to the client repo:
 name: Template sync check
 on:
   schedule:
-    - cron: '0 1 1 * *'  # 1st of every month at 09:00 SGT (01:00 UTC)
+    - cron: '0 1 1 */3 *'  # 1st of Jan, Apr, Jul, Oct at 09:00 SGT (01:00 UTC)
   workflow_dispatch:
 
 permissions:
@@ -264,7 +264,7 @@ Claude is instructed to focus only on shared infrastructure (build pipeline, tes
 
 1. Add `ANTHROPIC_API_KEY` as a secret in the client repo.
 2. Ensure the client repo's Actions settings allow creating PRs: **Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests**.
-3. Add the caller workflow file above. The workflow runs automatically on the 1st of every month and can be triggered manually via the GitHub Actions UI.
+3. Add the caller workflow file above. The workflow runs on the schedule defined in the caller (quarterly recommended) and can also be triggered manually via the GitHub Actions UI.
 
 ---
 
