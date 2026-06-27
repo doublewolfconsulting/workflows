@@ -701,6 +701,12 @@ async function runSyncAgent() {
           });
         }
       }
+      // After turn 1 (the initial file reads), mark the last tool result as a
+      // cache breakpoint. Turns 2-50 will read the large file contents from
+      // cache at 0.1x input cost instead of re-billing them at full rate.
+      if (turn === 1 && toolResults.length > 0) {
+        toolResults[toolResults.length - 1].cache_control = { type: 'ephemeral' };
+      }
       messages.push({ role: 'user', content: toolResults });
       continue;
     }
