@@ -711,11 +711,22 @@ async function runSyncAgent() {
       continue;
     }
 
-    // max_tokens: response was truncated mid-generation — push it and continue
-    // so Claude can resume from where it left off.
+    // max_tokens: response was truncated mid-generation.
+    // If there are dangling tool_use blocks, the API requires tool_result
+    // blocks in the next message — a plain text reply causes a 400 error.
     if (response.stop_reason === 'max_tokens') {
       console.warn('max_tokens hit on turn ' + turn + ' — continuing so Claude can resume.');
-      messages.push({ role: 'user', content: [{ type: 'text', text: 'Your previous response was cut off due to length. Please continue from where you left off.' }] });
+      const pendingToolUses = response.content.filter(b => b.type === 'tool_use');
+      if (pendingToolUses.length > 0) {
+        const toolResults = pendingToolUses.map(b => ({
+          type: 'tool_result',
+          tool_use_id: b.id,
+          content: JSON.stringify({ error: 'Response truncated before this tool call completed. Please retry this operation.' }),
+        }));
+        messages.push({ role: 'user', content: toolResults });
+      } else {
+        messages.push({ role: 'user', content: [{ type: 'text', text: 'Your previous response was cut off due to length. Please continue from where you left off.' }] });
+      }
       continue;
     }
 
