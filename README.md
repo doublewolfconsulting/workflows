@@ -247,15 +247,16 @@ jobs:
 |--------|-------------|
 | `ANTHROPIC_API_KEY` | Must be added to the **client repo** secrets |
 | `GITHUB_TOKEN` | Provided automatically by GitHub Actions |
+| `TEMPLATE_WRITE_TOKEN` | Optional. PAT with write access to the template repo (`doublewolfconsulting/consulting.doublewolf-static`). Required for bi-directional sync (creating PRs in the template repo when the client is ahead). If not set, client improvements are raised as issues in the template repo instead. |
 
 ### What it does
 
 1. Checks out the client repo, the template repo (`_template/`), and this workflows repo (`_wf/`)
 2. Reads four shared infrastructure files from each: `scripts/build.js`, `scripts/site-test.mjs`, `scripts/main.js`, `styles/input.css`
 3. Sends both sets of files to `claude-sonnet-4-6` for a gap analysis, asking it to identify changes that should flow template-to-client (bug fixes, improvements) and client-to-template (improvements the template should adopt)
-4. For high-confidence mechanical changes (single string replacement, build passes): applies the change, commits to a new branch (`sync/template-YYYYMM-N`), and opens a PR in the client repo
-5. Opens a `template-sync` labelled issue in the client repo with: summary, links to auto-generated PRs, manual review items, and port-back recommendations
-6. If any high-priority client-to-template improvements are found, also opens an issue in the template repo
+4. For high-confidence mechanical changes (single string replacement, build passes): applies the change, commits to a new branch (`sync/template-YYYYMM-N`), and opens a PR in the client repo. Each PR body includes a `**Retainer:** X.Xh` estimate based on change complexity.
+5. If any client improvements should be ported back to the template and `TEMPLATE_WRITE_TOKEN` is set, creates PRs directly in the template repo on branches prefixed `sync/client-`. Falls back to issues in the template repo if the token is absent.
+6. Opens a single findings PR in the client repo (no code changes, opened from main) titled `chore: template sync findings -- [Month Year]`. Body includes: what was auto-applied (with PR links), what was skipped and why, what needs manual review, and any port-back links. Falls back to a `template-sync` labelled issue only if PR creation itself fails.
 
 Claude is instructed to focus only on shared infrastructure (build pipeline, test assertions, CSS utilities) and to ignore client-specific content (brand colours, config values, page names, client-specific sections).
 

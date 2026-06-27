@@ -22,14 +22,25 @@ None.
 
 ## Recently completed
 
-### Template sync workflow (feat/template-sync-workflow, 2026-06-26)
+### Template sync workflow upgrades (feat/template-sync-workflow, 2026-06-27)
 
-Added `scripts/template-sync.mjs` and `.github/workflows/template-sync.yml` — a reusable
-monthly workflow that compares a client site against `consulting.doublewolf-static`. Reads
-four shared infrastructure files, calls Claude for a gap analysis, auto-applies
-high-confidence changes (one branch + PR per change), and opens a `template-sync` labelled
-issue in the client repo. High-priority client-to-template improvements also open an issue in
-the template repo.
+Three upgrades to `scripts/template-sync.mjs` and `.github/workflows/template-sync.yml`:
+
+1. **PRs instead of issues for findings**: auto-applied changes still get individual PRs.
+   The summary (skipped items, manual review items, port-back recommendations) is now a
+   single findings PR with no code changes rather than a GitHub issue. Falls back to an
+   issue only if PR creation fails.
+
+2. **Retainer estimates in every PR body**: the agent estimates hours for each auto-generated
+   PR (`**Retainer:** X.Xh`) based on change complexity (minor guard = 0.25h, moderate
+   improvement = 0.5h, significant multi-file change = 1-2h).
+
+3. **Bi-directional sync via PRs**: when the agent identifies client improvements to port
+   back to the template, it now creates PRs in the template repo directly using four new
+   tools (`write_template_file`, `git_create_template_branch`,
+   `git_commit_and_push_template`, `create_template_pr`). Requires `TEMPLATE_WRITE_TOKEN`
+   secret (optional PAT with write access to the template repo). Falls back to issues if
+   the token is absent.
 
 Caller workflow added to `doublewolfconsulting/mash` at `.github/workflows/template-sync.yml`
 (runs 1st of every month at 09:00 SGT, `working_directory: Deliverables/Website`).

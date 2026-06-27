@@ -6,7 +6,7 @@
  *
  * Claude runs in a multi-turn tool-calling loop. It reads files from both repos,
  * identifies infrastructure improvements to port, applies them, verifies with a
- * build, commits to branches, opens PRs, and creates a summary issue when done.
+ * build, commits to branches, opens PRs, and creates a findings PR when done.
  *
  * Required env vars:
  *   ANTHROPIC_API_KEY   -- repository secret
@@ -16,19 +16,27 @@
  *   CLIENT_WORKING_DIR  -- subdirectory where the website lives (empty or '.' for root)
  *   TEMPLATE_DIR        -- absolute path where consulting.doublewolf-static is checked out
  *   TEMPLATE_REPO       -- defaults to doublewolfconsulting/consulting.doublewolf-static
+ *
+ * Optional env vars:
+ *   TEMPLATE_WRITE_TOKEN -- PAT with write access to TEMPLATE_REPO. If not set,
+ *                           client-to-template improvements are raised as issues
+ *                           instead of PRs in the template repo.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { execSync } from 'child_process';
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const GITHUB_TOKEN      = process.env.GITHUB_TOKEN;
-const CLIENT_REPO       = process.env.CLIENT_REPO || '';
-const CLIENT_DIR        = process.env.CLIENT_DIR || '';
-const CLIENT_WORKING_DIR = process.env.CLIENT_WORKING_DIR || '.';
-const TEMPLATE_DIR      = process.env.TEMPLATE_DIR || '';
-const TEMPLATE_REPO     = process.env.TEMPLATE_REPO || 'doublewolfconsulting/consulting.doublewolf-static';
+const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
+const GITHUB_TOKEN        = process.env.GITHUB_TOKEN;
+const CLIENT_REPO         = process.env.CLIENT_REPO || '';
+const CLIENT_DIR          = process.env.CLIENT_DIR || '';
+const CLIENT_WORKING_DIR  = process.env.CLIENT_WORKING_DIR || '.';
+const TEMPLATE_DIR        = process.env.TEMPLATE_DIR || '';
+const TEMPLATE_REPO       = process.env.TEMPLATE_REPO || 'doublewolfconsulting/consulting.doublewolf-static';
+// Optional: PAT with write access to the template repo for bi-directional sync.
+// Falls back to GITHUB_TOKEN (which typically lacks cross-repo write access).
+const TEMPLATE_WRITE_TOKEN = process.env.TEMPLATE_WRITE_TOKEN || GITHUB_TOKEN;
 
 const [CLIENT_OWNER, CLIENT_REPO_NAME] = CLIENT_REPO.split('/');
 const [TEMPLATE_OWNER, TEMPLATE_REPO_NAME] = TEMPLATE_REPO.split('/');
@@ -50,6 +58,24 @@ async function gh(method, path, body) {
     method,
     headers: {
       'Authorization': 'Bearer ' + GITHUB_TOKEN,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('GitHub API ' + method + ' ' + path + ' => ' + res.status + ': ' + await res.text());
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+// GitHub API call using a specific token (for template repo write operations)
+async function ghWithToken(token, method, path, body) {
+  const res = await fetch('https://api.github.com' + path, {
+    method,
+    headers: {
+      'Authorization': 'Bearer ' + token,
       'Accept': 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
@@ -92,6 +118,12 @@ function isUnderClientDir(filePath) {
   return abs.startsWith(clientAbs + '/') || abs === clientAbs;
 }
 
+function isUnderTemplateDir(filePath) {
+  const abs = resolve(filePath);
+  const templateAbs = resolve(TEMPLATE_DIR);
+  return abs.startsWith(templateAbs + '/') || abs === templateAbs;
+}
+
 // --- Tool definitions --------------------------------------------------------
 
 const tools = [
@@ -125,6 +157,18 @@ const tools = [
       type: 'object',
       properties: {
         path: { type: 'string', description: 'Absolute path to the file to write (must be under CLIENT_DIR).' },
+        content: { type: 'string', description: 'Content to write to the file.' },
+      },
+      required: ['path', 'content'],
+    },
+  },
+  {
+    name: 'write_template_file',
+    description: 'Write content to a file in the template directory only (for porting client improvements back to the template). Creates parent directories if needed.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path to the file to write (must be under TEMPLATE_DIR).' },
         content: { type: 'string', description: 'Content to write to the file.' },
       },
       required: ['path', 'content'],
@@ -192,7 +236,7 @@ const tools = [
   },
   {
     name: 'create_issue',
-    description: 'Create a GitHub issue. Defaults to the client repo; pass repo to create in a different repo (e.g. the template repo).',
+    description: 'Create a GitHub issue. Defaults to the client repo; pass repo to create in a different repo (e.g. the template repo). Use this as a fallback when PR creation fails.',
     input_schema: {
       type: 'object',
       properties: {
@@ -209,6 +253,48 @@ const tools = [
         },
       },
       required: ['title', 'body'],
+    },
+  },
+  {
+    name: 'git_create_template_branch',
+    description: 'Create a new branch in the template repo for porting client improvements back. Branch name must start with "sync/client-".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        branch_name: { type: 'string', description: 'Name for the new branch. Must start with "sync/client-".' },
+      },
+      required: ['branch_name'],
+    },
+  },
+  {
+    name: 'git_commit_and_push_template',
+    description: 'Stage listed files, commit with a message, and push to the template repo remote.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'File paths relative to TEMPLATE_DIR to stage.',
+        },
+        message: { type: 'string', description: 'Commit message.' },
+        branch: { type: 'string', description: 'Branch to push to.' },
+      },
+      required: ['files', 'message', 'branch'],
+    },
+  },
+  {
+    name: 'create_template_pr',
+    description: 'Create a pull request in the template repo to port an improvement from the client. Falls back to creating an issue if PR creation fails.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: 'PR title.' },
+        body: { type: 'string', description: 'PR body (markdown).' },
+        head: { type: 'string', description: 'Source branch name.' },
+        base: { type: 'string', description: 'Target branch (defaults to "main").' },
+      },
+      required: ['title', 'body', 'head'],
     },
   },
 ];
@@ -261,6 +347,23 @@ async function executeTool(name, input) {
         const { path, content } = input;
         if (!isUnderClientDir(path)) {
           return { error: 'write_file may only write to CLIENT_DIR. Path is outside: ' + path };
+        }
+        try {
+          const dir = dirname(path);
+          if (!existsSync(dir)) {
+            mkdirSync(dir, { recursive: true });
+          }
+          writeFileSync(path, content, 'utf8');
+          return { success: true };
+        } catch (err) {
+          return { error: 'Could not write file: ' + err.message };
+        }
+      }
+
+      case 'write_template_file': {
+        const { path, content } = input;
+        if (!isUnderTemplateDir(path)) {
+          return { error: 'write_template_file may only write to TEMPLATE_DIR. Path is outside: ' + path };
         }
         try {
           const dir = dirname(path);
@@ -370,6 +473,70 @@ async function executeTool(name, input) {
         }
       }
 
+      case 'git_create_template_branch': {
+        const { branch_name } = input;
+        if (!branch_name.startsWith('sync/client-')) {
+          return { error: 'branch_name must start with "sync/client-", got: ' + branch_name };
+        }
+        try {
+          execSync(
+            'git remote set-url origin https://x-access-token:' + TEMPLATE_WRITE_TOKEN + '@github.com/' + TEMPLATE_REPO + '.git',
+            { cwd: TEMPLATE_DIR }
+          );
+          execSync('git checkout main', { cwd: TEMPLATE_DIR });
+          execSync('git pull origin main', { cwd: TEMPLATE_DIR });
+          execSync('git checkout -b ' + branch_name, { cwd: TEMPLATE_DIR });
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
+      }
+
+      case 'git_commit_and_push_template': {
+        const { files, message, branch } = input;
+        try {
+          execSync(
+            'git remote set-url origin https://x-access-token:' + TEMPLATE_WRITE_TOKEN + '@github.com/' + TEMPLATE_REPO + '.git',
+            { cwd: TEMPLATE_DIR }
+          );
+          for (const file of files) {
+            execSync('git add ' + JSON.stringify(file), { cwd: TEMPLATE_DIR });
+          }
+          execSync('git commit -m ' + JSON.stringify(message), { cwd: TEMPLATE_DIR });
+          execSync('git push origin ' + branch, { cwd: TEMPLATE_DIR });
+          return { success: true };
+        } catch (err) {
+          return { error: err.message };
+        }
+      }
+
+      case 'create_template_pr': {
+        const { title, body, head, base } = input;
+        try {
+          const pr = await ghWithToken(
+            TEMPLATE_WRITE_TOKEN,
+            'POST',
+            '/repos/' + TEMPLATE_OWNER + '/' + TEMPLATE_REPO_NAME + '/pulls',
+            { title, body, head, base: base || 'main' }
+          );
+          return { url: pr.html_url, number: pr.number };
+        } catch (err) {
+          // Fall back to creating an issue in the template repo
+          console.warn('create_template_pr failed (' + err.message + '), falling back to issue');
+          try {
+            await ensureLabel(TEMPLATE_OWNER, TEMPLATE_REPO_NAME);
+            const issue = await gh('POST', '/repos/' + TEMPLATE_OWNER + '/' + TEMPLATE_REPO_NAME + '/issues', {
+              title,
+              body: '> Note: PR creation failed (likely missing TEMPLATE_WRITE_TOKEN). This is a tracking issue instead.\n\n' + body,
+              labels: [LABEL],
+            });
+            return { url: issue.html_url, number: issue.number, type: 'issue_fallback' };
+          } catch (issueErr) {
+            return { error: 'PR creation failed: ' + err.message + '. Issue fallback also failed: ' + issueErr.message };
+          }
+        }
+      }
+
       default:
         return { error: 'Unknown tool: ' + name };
     }
@@ -431,21 +598,33 @@ function buildSystemPrompt() {
     '4. After each file change, run the build to verify',
     '5. If the build fails, revert the change (write_file back to original) and note it as manual',
     '6. Group related changes into logical commits and PRs (one PR per theme, e.g. "fix: null-safety guards in build.js")',
-    '7. Create a summary issue when done',
+    '7. For each PR you create in the client repo, include a retainer time estimate at the end of the PR body.',
+    '   Format: `**Retainer:** X.Xh`.',
+    '   Base the estimate on the complexity of the changes:',
+    '     - minor guard/null-fix = 0.25h',
+    '     - moderate function improvement = 0.5h',
+    '     - significant new feature or multi-file change = 1-2h',
+    '   Be consistent and conservative.',
+    '8. When done with client-side changes, assess whether any improvements found in the client should be ported back to the template.',
+    '   If yes, use write_template_file, git_create_template_branch, git_commit_and_push_template, and create_template_pr.',
+    '   Branch names in the template repo must start with sync/client-.',
+    '   After changing template files, note in the PR body that the caller must run `npm run build` in the template repo to verify (you cannot run builds in the template repo during this workflow run).',
+    '9. When all auto-applicable changes are done, create a single findings PR in the client repo titled "chore: template sync findings -- ' + MONTH_YEAR + '".',
+    '   This PR has NO code changes (open it from main). Its body must include:',
+    '   - What was auto-applied (with links to the individual PRs)',
+    '   - What was skipped and why (changes that could not be auto-applied)',
+    '   - What needs manual review in a future session',
+    '   - Any client improvements ported back to the template (with PR/issue links)',
+    '   This PR can be merged immediately (empty diff) or used as a discussion thread.',
+    '   Only fall back to creating an issue if PR creation itself fails.',
     '',
     'COMMIT AND PR RULES:',
-    '- Branch names must start with sync/template-',
+    '- Branch names in the client repo must start with sync/template-',
+    '- Branch names in the template repo must start with sync/client-',
     '- Commit format: type: description (e.g. fix: add filter(Boolean) to sameAs arrays)',
     '- No em dashes anywhere in commit messages, PR titles, or PR bodies',
     '- No "Co-Authored-By: Claude" or any AI attribution in commits or PRs',
     '- PR titles should be short and descriptive',
-    '',
-    'WHEN DONE:',
-    'Create a GitHub issue in the client repo with:',
-    '- Title: "Template sync: ' + MONTH_YEAR + '"',
-    '- Label: template-sync',
-    '- Body: summary of what was applied (with PR links), what was skipped and why, and any improvements the client has that should be ported back to the template',
-    'If the client has high-priority improvements the template should get, also create an issue in the template repo (' + TEMPLATE_REPO + ').',
     '',
     'Context:',
     '- CLIENT_DIR: ' + CLIENT_DIR,
@@ -454,6 +633,7 @@ function buildSystemPrompt() {
     '- CLIENT_REPO: ' + CLIENT_REPO,
     '- TEMPLATE_REPO: ' + TEMPLATE_REPO,
     '- YYYYMM (for branch names): ' + YYYYMM,
+    '- TEMPLATE_WRITE_TOKEN available: ' + (process.env.TEMPLATE_WRITE_TOKEN ? 'yes' : 'no (will fall back to issue for template repo PRs)'),
   ].join('\n');
 }
 
@@ -473,8 +653,9 @@ function buildInitialMessage() {
     '- styles/input.css',
     '',
     'Then analyse the differences and port infrastructure improvements from the template to the client.',
-    'Create PRs for each logical group of changes.',
-    'When done, create a summary issue in the client repo.',
+    'Create individual PRs for each logical group of auto-applied changes.',
+    'If you find improvements in the client that should go back to the template, create PRs in the template repo using git_create_template_branch, write_template_file, git_commit_and_push_template, and create_template_pr.',
+    'When done, create a single findings PR in the client repo (no code changes) summarising everything.',
   ].join('\n');
 }
 
@@ -556,10 +737,11 @@ async function main() {
   if (!CLIENT_DIR)   throw new Error('CLIENT_DIR env var is required');
   if (!TEMPLATE_DIR) throw new Error('TEMPLATE_DIR env var is required');
 
-  console.log('Template sync (agentic) — ' + MONTH_YEAR);
+  console.log('Template sync (agentic) -- ' + MONTH_YEAR);
   console.log('Client repo:  ' + CLIENT_REPO);
   console.log('Client site:  ' + CLIENT_SITE);
   console.log('Template dir: ' + TEMPLATE_DIR);
+  console.log('TEMPLATE_WRITE_TOKEN: ' + (process.env.TEMPLATE_WRITE_TOKEN ? 'set' : 'not set (template PRs will fall back to issues)'));
   console.log('');
 
   if (!ANTHROPIC_API_KEY) {

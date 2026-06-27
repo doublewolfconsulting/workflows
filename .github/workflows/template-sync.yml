@@ -71,3 +71,6 @@ jobs:
           CLIENT_WORKING_DIR: ${{ inputs.working_directory }}
           TEMPLATE_DIR: ${{ github.workspace }}/_template
           TEMPLATE_REPO: ${{ inputs.template_repo }}
+          # Optional: PAT with write access to the template repo.
+          # If not set, client-to-template improvements are raised as issues instead of PRs.
+          TEMPLATE_WRITE_TOKEN: ${{ secrets.TEMPLATE_WRITE_TOKEN }}
