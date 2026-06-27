@@ -163,6 +163,19 @@ const tools = [
     },
   },
   {
+    name: 'edit_file',
+    description: 'Apply a targeted string replacement to a file in the client directory. Replaces the first occurrence of old_string with new_string. Fails if old_string is not found or appears more than once — in that case, provide more surrounding context to make it unique. Prefer this over write_file for any modification: it emits only the changed lines, not the full file.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path to the file to edit (must be under CLIENT_DIR).' },
+        old_string: { type: 'string', description: 'The exact text to find and replace. Must match exactly (including whitespace and indentation). Must appear exactly once in the file.' },
+        new_string: { type: 'string', description: 'The replacement text.' },
+      },
+      required: ['path', 'old_string', 'new_string'],
+    },
+  },
+  {
     name: 'write_template_file',
     description: 'Write content to a file in the template directory only (for porting client improvements back to the template). Creates parent directories if needed.',
     input_schema: {
@@ -172,6 +185,19 @@ const tools = [
         content: { type: 'string', description: 'Content to write to the file.' },
       },
       required: ['path', 'content'],
+    },
+  },
+  {
+    name: 'edit_template_file',
+    description: 'Apply a targeted string replacement to a file in the template directory. Same behaviour as edit_file but restricted to TEMPLATE_DIR. Prefer this over write_template_file for any modification.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Absolute path to the file to edit (must be under TEMPLATE_DIR).' },
+        old_string: { type: 'string', description: 'The exact text to find and replace. Must appear exactly once in the file.' },
+        new_string: { type: 'string', description: 'The replacement text.' },
+      },
+      required: ['path', 'old_string', 'new_string'],
     },
   },
   {
@@ -361,6 +387,26 @@ async function executeTool(name, input) {
         }
       }
 
+      case 'edit_file': {
+        const { path, old_string, new_string } = input;
+        if (!isUnderClientDir(path)) {
+          return { error: 'edit_file may only edit files under CLIENT_DIR. Path is outside: ' + path };
+        }
+        if (!existsSync(path)) {
+          return { error: 'File not found: ' + path };
+        }
+        try {
+          const content = readFileSync(path, 'utf8');
+          const count = content.split(old_string).length - 1;
+          if (count === 0) return { error: 'old_string not found in file. Check for exact whitespace/indentation match.' };
+          if (count > 1) return { error: 'old_string appears ' + count + ' times. Provide more surrounding context to make it unique.' };
+          writeFileSync(path, content.replace(old_string, new_string), 'utf8');
+          return { success: true };
+        } catch (err) {
+          return { error: 'Could not edit file: ' + err.message };
+        }
+      }
+
       case 'write_template_file': {
         const { path, content } = input;
         if (!isUnderTemplateDir(path)) {
@@ -375,6 +421,26 @@ async function executeTool(name, input) {
           return { success: true };
         } catch (err) {
           return { error: 'Could not write file: ' + err.message };
+        }
+      }
+
+      case 'edit_template_file': {
+        const { path, old_string, new_string } = input;
+        if (!isUnderTemplateDir(path)) {
+          return { error: 'edit_template_file may only edit files under TEMPLATE_DIR. Path is outside: ' + path };
+        }
+        if (!existsSync(path)) {
+          return { error: 'File not found: ' + path };
+        }
+        try {
+          const content = readFileSync(path, 'utf8');
+          const count = content.split(old_string).length - 1;
+          if (count === 0) return { error: 'old_string not found in file. Check for exact whitespace/indentation match.' };
+          if (count > 1) return { error: 'old_string appears ' + count + ' times. Provide more surrounding context to make it unique.' };
+          writeFileSync(path, content.replace(old_string, new_string), 'utf8');
+          return { success: true };
+        } catch (err) {
+          return { error: 'Could not edit template file: ' + err.message };
         }
       }
 
@@ -596,7 +662,7 @@ function buildSystemPrompt() {
     'HOW TO WORK:',
     '1. Start by reading the key files from both repos: scripts/build.js, scripts/main.js, scripts/site-test.mjs, styles/input.css',
     '2. Compare them carefully and identify specific improvements to port',
-    '3. For each improvement, make the minimal targeted change',
+    '3. For each improvement, make the minimal targeted change using edit_file (or edit_template_file). NEVER use write_file or write_template_file to modify an existing file — only use them to create brand-new files. edit_file emits only the changed lines; write_file requires the full file and will hit output token limits on large files.',
     '4. After each file change, run the build to verify',
     '5. If the build fails, revert the change (write_file back to original) and note it as manual',
     '6. Group related changes into logical commits and PRs (one PR per theme, e.g. "fix: null-safety guards in build.js")',
