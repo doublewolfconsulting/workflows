@@ -557,7 +557,7 @@ async function callClaude(messages, toolDefs, systemPrompt) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8096,
+      max_tokens: 16000,
       system: systemPrompt,
       tools: toolDefs,
       messages,
@@ -700,6 +700,14 @@ async function runSyncAgent() {
         }
       }
       messages.push({ role: 'user', content: toolResults });
+      continue;
+    }
+
+    // max_tokens: response was truncated mid-generation — push it and continue
+    // so Claude can resume from where it left off.
+    if (response.stop_reason === 'max_tokens') {
+      console.warn('max_tokens hit on turn ' + turn + ' — continuing so Claude can resume.');
+      messages.push({ role: 'user', content: [{ type: 'text', text: 'Your previous response was cut off due to length. Please continue from where you left off.' }] });
       continue;
     }
 
