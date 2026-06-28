@@ -146,19 +146,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       urls: ${{ steps.detect-urls.outputs.urls }}
+      deleted_urls: ${{ steps.detect-deleted.outputs.deleted_urls }}
     steps:
       # ... your deploy steps ...
       - name: Detect changed pages
         id: detect-urls
         run: |
           echo "urls=https://example.com/ https://example.com/faq" >> "$GITHUB_OUTPUT"
+      - name: Detect deleted pages
+        id: detect-deleted
+        run: |
+          echo "deleted_urls=https://example.com/old-page" >> "$GITHUB_OUTPUT"
 
   index-notify:
     needs: deploy
-    if: needs.deploy.outputs.urls != ''
+    if: needs.deploy.outputs.urls != '' || needs.deploy.outputs.deleted_urls != ''
     uses: YOUR_ORG/YOUR_WORKFLOWS_REPO/.github/workflows/index-notify.yml@main
     with:
       urls: ${{ needs.deploy.outputs.urls }}
+      deleted_urls: ${{ needs.deploy.outputs.deleted_urls }}
     secrets:
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
@@ -170,9 +176,10 @@ For emergency manual submission without a full deploy, trigger via the GitHub Ac
 
 ### Inputs
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `urls` | Yes | Space-separated URLs to submit (e.g. `https://example.com/ https://example.com/faq`) |
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `urls` | No | `''` | Space-separated URLs to submit as updated (e.g. `https://example.com/ https://example.com/faq`) |
+| `deleted_urls` | No | `''` | Space-separated URLs that have been removed; submitted as `URL_DELETED` to Google Indexing API (IndexNow has no deletion concept) |
 
 ### Secrets
 

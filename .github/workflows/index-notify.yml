@@ -5,8 +5,14 @@ on:
     inputs:
       urls:
         description: 'Space-separated URLs to submit'
-        required: true
+        required: false
         type: string
+        default: ''
+      deleted_urls:
+        description: 'Space-separated URLs that have been removed (submitted as URL_DELETED)'
+        required: false
+        type: string
+        default: ''
     secrets:
       GOOGLE_OAUTH_CLIENT_ID:
         required: true
@@ -22,6 +28,11 @@ on:
         description: 'Space-separated URLs to submit (e.g. https://example.com/ https://example.com/faq)'
         required: true
         type: string
+      deleted_urls:
+        description: 'Space-separated URLs that have been removed (e.g. https://example.com/old-page)'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -32,6 +43,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Submit to Google Indexing API
+        if: inputs.urls != ''
         continue-on-error: true
         env:
           SUBMIT_URLS: ${{ inputs.urls }}
@@ -59,6 +71,7 @@ jobs:
           done
 
       - name: Submit to IndexNow
+        if: inputs.urls != ''
         continue-on-error: true
         env:
           INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
@@ -80,3 +93,31 @@ jobs:
             -d "$PAYLOAD")
           echo "IndexNow [$STATUS]:"; cat /tmp/resp.txt; echo
           [ "$STATUS" = "200" ] || [ "$STATUS" = "202" ] && echo "Success." || echo "Non-fatal: HTTP $STATUS"
+
+      - name: Submit deletions to Google Indexing API
+        if: inputs.deleted_urls != ''
+        continue-on-error: true
+        env:
+          DELETED_URLS: ${{ inputs.deleted_urls }}
+        run: |
+          # Exchange refresh token for access token
+          TOKEN_RESPONSE=$(curl -s -X POST https://oauth2.googleapis.com/token \
+            -d "client_id=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" \
+            -d "client_secret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
+            -d "refresh_token=${{ secrets.GOOGLE_INDEXING_REFRESH_TOKEN }}" \
+            -d "grant_type=refresh_token")
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+          if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to get access token: $TOKEN_RESPONSE"
+            exit 1
+          fi
+
+          # Submit each deleted URL
+          for URL in $DELETED_URLS; do
+            RESPONSE=$(curl -s -o /tmp/google_del_resp.txt -w "%{http_code}" \
+              -X POST "https://indexing.googleapis.com/v3/urlNotifications:publish" \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"url\": \"$URL\", \"type\": \"URL_DELETED\"}")
+            echo "Google URL_DELETED [$RESPONSE] $URL:"; cat /tmp/google_del_resp.txt; echo
+          done

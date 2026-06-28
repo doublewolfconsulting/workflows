@@ -22,6 +22,17 @@ None.
 
 ## Recently completed
 
+### index-notify: URL_DELETED support (28 June 2026)
+
+- Added optional `deleted_urls` input to both `workflow_call` and `workflow_dispatch` triggers (default `''`)
+- Made `urls` input optional (was `required: true`) to handle the case where only deletions occur
+- Added `if: inputs.urls != ''` guard on existing "Submit to Google Indexing API" and "Submit to IndexNow" steps
+- Added "Submit deletions to Google Indexing API" step: `if: inputs.deleted_urls != ''`, loops over `deleted_urls`, POSTs `"type": "URL_DELETED"`, `continue-on-error: true`
+- IndexNow has no deletion concept — deleted URLs only go to Google Indexing API
+- Updated README.md inputs table to document `deleted_urls`
+
+## Recently completed
+
 ### Template sync workflow upgrades (feat/template-sync-workflow, 2026-06-27)
 
 Three upgrades to `scripts/template-sync.mjs` and `.github/workflows/template-sync.yml`:
