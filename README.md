@@ -6,6 +6,67 @@ Dependabot is configured to open weekly PRs for npm and GitHub Actions version b
 
 ---
 
+## PR Checks
+
+**File:** `.github/workflows/pr-checks.yml`
+
+Runs on every PR against `main`. Validates PR hygiene and catches known doc consistency errors before review. No secrets or external services required.
+
+Three jobs run in parallel:
+
+1. **PR body** — required sections present (configurable), minimum length, no AI/Claude attribution
+2. **Branch name** — must match naming convention (configurable regex); long-lived branches (`main`, `development`, `staging`) are always allowed
+3. **Doc consistency** — changed files under a configurable path prefix are scanned for prohibited patterns passed by the caller
+
+### Usage
+
+```yaml
+# .github/workflows/pr-checks.yml
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  checks:
+    uses: doublewolfconsulting/workflows/.github/workflows/pr-checks.yml@main
+    with:
+      prohibited_patterns: |
+        bad pattern here|||Error message shown as GitHub annotation
+        another pattern|||Another message
+```
+
+No secrets required.
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `required_sections` | No | `## Summary,## Test plan` | Comma-separated list of section headers that must appear in the PR body |
+| `branch_pattern` | No | `^(feature\|feat\|fix\|docs\|chore\|refactor\|test)/` | ERE regex that branch names must match |
+| `doc_path_filter` | No | `docs/` | File path prefix to scope doc consistency checks |
+| `prohibited_patterns` | No | `''` (skips check) | Newline-separated `PATTERN|||MESSAGE` pairs. `PATTERN` is a case-insensitive `grep -E` expression. Leave empty to skip doc consistency checks. |
+
+### Prohibited pattern format
+
+Each non-blank, non-comment line in `prohibited_patterns` must be `PATTERN|||MESSAGE`:
+
+```
+# Comment lines (starting with #) are ignored
+15 fund|||Wrong fund count — use "3 funds (6 share classes)"
+s3://boreas-documents|||Wrong S3 bucket — use boreas-fund-data/documents/
+```
+
+Patterns are matched case-insensitively against every changed file under `doc_path_filter`. On a match, a GitHub error annotation is added at the file level with the message and up to 5 matching lines shown.
+
+### Setup
+
+No secrets or external services needed. Add the caller workflow and optionally a `CODEOWNERS` file to enforce required reviewers via branch protection.
+
+---
+
 ## PSI Monitor
 
 **File:** `.github/workflows/psi-monitor.yml`
