@@ -22,13 +22,13 @@ None.
 
 ## Recently completed
 
-### PR Review reusable workflow (fix/auto-review-direct-prompt, 2026-07-18)
+### PR Review reusable workflow (2026-07-18)
 
-Added `.github/workflows/auto-review.yml` — a reusable `workflow_call` workflow that runs Claude Code as an automated PR reviewer. Uses `ANTHROPIC_API_KEY` with `claude-sonnet-4-6` pinned for cost efficiency. Callers control path triggers and pass `additional_context` to inject repo-specific ground-truth facts into the review prompt.
+Added `.github/workflows/auto-review.yml` + `scripts/pr-review.mjs`. Reusable `workflow_call` workflow that reviews every non-draft PR via a single Anthropic API call — no agentic loop.
 
-Agent uses a direct prompt: reads `gh pr diff`, reads source-of-truth docs, then calls `gh pr review --request-changes` or `--approve`. Calls out every issue precisely (file, line, what is wrong, correct value, which doc confirms it) so authors learn and fix themselves. `contents: read` only — no write access. Approves silently when correct. Tags `owner_handle` only for genuine business/scope ambiguity that cannot be resolved from the docs.
+**How it works:** checks out caller repo + this workflows repo into `_wf/`, runs `npm ci` (no new dependencies; fetch is built-in), then `node _wf/scripts/pr-review.mjs`. The script calls `gh pr diff`, makes one API call to Claude Sonnet 4.6 with diff + `additional_context`, parses the JSON response, and posts `gh pr review --approve` or `--request-changes`.
 
-Caller must include explicit `permissions:` block (contents: read, pull-requests: write, issues: write, id-token: write, actions: read) and `fetch-depth: 0` is set in the workflow for `gh pr diff` to work correctly.
+Cost: ~$0.02–0.05 per review. Caller must include explicit `permissions:` block and enable "Allow GitHub Actions to create and approve pull requests" in the repo's Actions settings.
 
 ### PR Checks reusable workflow (feat/pr-checks-v2, 2026-07-18)
 

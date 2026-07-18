@@ -10,7 +10,7 @@ Dependabot is configured to open weekly PRs for npm and GitHub Actions version b
 
 **File:** `.github/workflows/auto-review.yml`
 
-Runs Claude Code as an automated reviewer on every non-draft PR. Reviews the whole repo (diff + ground-truth docs), calls out every issue precisely so the author can learn and fix, then approves or requests changes. No `@claude review` needed. Uses `ANTHROPIC_API_KEY` (pay-per-token, Sonnet 4.6 pinned for cost efficiency).
+Runs Claude as an automated reviewer on every non-draft PR. Gets the PR diff, makes a **single API call** to Claude Sonnet 4.6 with the diff + repo context, then approves or requests changes. No agentic loop — predictable cost of ~$0.02–0.05 per review. No `@claude review` needed.
 
 ### Usage
 
@@ -58,12 +58,21 @@ jobs:
 |--------|-------------|
 | `ANTHROPIC_API_KEY` | Anthropic API key (same key used by PSI monitor and template sync). Sonnet 4.6 is pinned to keep costs low. |
 
+### Setup
+
+In the caller repo, go to **Settings → Actions → General → Workflow permissions** and enable **"Allow GitHub Actions to create and approve pull requests"**.
+
 ### How it works
 
-For each issue found (typo, wrong fact, stale reference, inconsistency), the agent describes it precisely — file, line, what is wrong, what the correct value is, and which ground-truth doc confirms it. The author fixes it; the agent doesn't write to the repo.
+1. `gh pr diff` fetches the PR diff
+2. A single Claude Sonnet 4.6 API call receives the diff + `additional_context` as ground truth
+3. Claude responds with `{"decision": "approve"|"request_changes", "body": "..."}`
+4. `gh pr review` posts the result
+
+For each issue found (typo, wrong fact, stale reference, inconsistency), the body states precisely: file · line · what is wrong · correct value · which source confirms it. The author fixes it; no repo writes.
 
 - **Issues found** → REQUEST CHANGES with detailed findings. Tags `owner_handle` only for genuine business/scope ambiguity.
-- **Everything correct** → APPROVED, no comment.
+- **Everything correct** → APPROVED, body "LGTM".
 - Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
 
 ---
