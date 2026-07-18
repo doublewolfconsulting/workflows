@@ -6,6 +6,62 @@ Dependabot is configured to open weekly PRs for npm and GitHub Actions version b
 
 ---
 
+## Auto Review
+
+**File:** `.github/workflows/auto-review.yml`
+
+Runs Claude Code as an automated reviewer on every non-draft PR. Reviews the whole repo (diff + ground-truth docs), calls out every issue precisely so the author can learn and fix, then approves or requests changes. No `@claude review` needed. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Claude Max subscription) — not API-billed.
+
+### Usage
+
+```yaml
+# .github/workflows/auto-review.yml
+name: Auto Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    if: github.event.pull_request.draft == false
+    concurrency:
+      group: auto-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
+    with:
+      owner_handle: '@yourhandle'
+      additional_context: |
+        Any repo-specific facts Claude should verify changed files against.
+        E.g. correct field names, S3 paths, schedule times, fund counts.
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+```
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `owner_handle` | Yes | — | GitHub handle tagged only when an issue cannot be resolved without human judgement (business decision, ambiguous scope). |
+| `additional_context` | No | `''` | Repo-specific ground-truth facts, coding standards, architecture notes injected into the prompt. |
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token from your Claude Max subscription |
+
+### How it works
+
+For each issue found (typo, wrong fact, stale reference, inconsistency), the agent describes it precisely — file, line, what is wrong, what the correct value is, and which ground-truth doc confirms it. The author fixes it; the agent doesn't write to the repo.
+
+- **Issues found** → REQUEST CHANGES with detailed findings. Tags `owner_handle` only for genuine business/scope ambiguity.
+- **Everything correct** → APPROVED, no comment.
+- Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
+
+---
+
 ## PR Checks
 
 **File:** `.github/workflows/pr-checks.yml`
@@ -16,7 +72,7 @@ Three jobs run in parallel:
 
 1. **PR body** — required sections present (configurable), minimum length, no AI/Claude attribution
 2. **Branch name** — must match naming convention (configurable regex); long-lived branches (`main`, `development`, `staging`) are always allowed
-3. **Doc consistency** — changed files under a configurable path prefix are scanned for prohibited patterns passed by the caller
+3. **Doc consistency** — changed files under a configurable path prefix are scanned for `prohibited_patterns` (must not be present) and `required_patterns` (must be present). Both are optional.
 
 ### Usage
 
@@ -34,8 +90,10 @@ jobs:
     uses: doublewolfconsulting/workflows/.github/workflows/pr-checks.yml@main
     with:
       prohibited_patterns: |
-        bad pattern here|||Error message shown as GitHub annotation
+        bad pattern|||Error message shown as GitHub annotation
         another pattern|||Another message
+      required_patterns: |
+        must-exist pattern|||Message if pattern is missing from a changed file
 ```
 
 No secrets required.
@@ -47,11 +105,12 @@ No secrets required.
 | `required_sections` | No | `## Summary,## Test plan` | Comma-separated list of section headers that must appear in the PR body |
 | `branch_pattern` | No | `^(feature\|feat\|fix\|docs\|chore\|refactor\|test)/` | ERE regex that branch names must match |
 | `doc_path_filter` | No | `docs/` | File path prefix to scope doc consistency checks |
-| `prohibited_patterns` | No | `''` (skips check) | Newline-separated `PATTERN|||MESSAGE` pairs. `PATTERN` is a case-insensitive `grep -E` expression. Leave empty to skip doc consistency checks. |
+| `prohibited_patterns` | No | `''` (skips) | Newline-separated `PATTERN\|\|\|MESSAGE` pairs. Fails if pattern IS found in a changed docs file. |
+| `required_patterns` | No | `''` (skips) | Newline-separated `PATTERN\|\|\|MESSAGE` pairs. Fails if pattern is NOT found in a changed docs file. |
 
-### Prohibited pattern format
+### Pattern format
 
-Each non-blank, non-comment line in `prohibited_patterns` must be `PATTERN|||MESSAGE`:
+Both inputs use the same `PATTERN|||MESSAGE` format:
 
 ```
 # Comment lines (starting with #) are ignored
@@ -59,7 +118,9 @@ Each non-blank, non-comment line in `prohibited_patterns` must be `PATTERN|||MES
 s3://boreas-documents|||Wrong S3 bucket — use boreas-fund-data/documents/
 ```
 
-Patterns are matched case-insensitively against every changed file under `doc_path_filter`. On a match, a GitHub error annotation is added at the file level with the message and up to 5 matching lines shown.
+`PATTERN` is a case-insensitive `grep -E` expression matched against every changed file under `doc_path_filter`. Failures appear as GitHub error annotations at the file level, with up to 5 matching lines shown for prohibited patterns.
+
+`doc-consistency` job is skipped entirely when both `prohibited_patterns` and `required_patterns` are empty.
 
 ### Setup
 

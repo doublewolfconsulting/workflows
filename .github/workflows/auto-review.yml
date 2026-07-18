@@ -1,0 +1,93 @@
+name: Auto Review (Reusable)
+
+# Recommended caller trigger:
+#
+#   on:
+#     pull_request:
+#       branches: [main]
+#       types: [opened, synchronize, reopened, ready_for_review]
+#
+#   jobs:
+#     review:
+#       if: github.event.pull_request.draft == false
+#       concurrency:
+#         group: auto-review-${{ github.event.pull_request.number }}
+#         cancel-in-progress: true
+#       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
+#       with:
+#         owner_handle: '@yourhandle'
+#         additional_context: |
+#           Repo-specific facts...
+#       secrets:
+#         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      owner_handle:
+        description: >
+          GitHub handle to tag only when an issue cannot be resolved without
+          human judgement (e.g. a business decision, ambiguous scope).
+        type: string
+        required: true
+      additional_context:
+        description: >
+          Repo-specific context — ground-truth facts, coding standards,
+          architecture notes. Claude reads the repo directly but this gives
+          it fast orientation.
+        type: string
+        default: ''
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Claude Code OAuth token (Claude Max subscription, not API-billed)
+        required: true
+
+jobs:
+  review:
+    name: Claude review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run automated Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            ${{ inputs.additional_context != '' && format('\n\nAdditional context for this repo:\n\n{0}', inputs.additional_context) || '' }}
+
+            ---
+
+            For any changed file, also read the source-of-truth docs (CLAUDE.md,
+            docs/prd.md, docs/data-pipeline.md, docs/field-specifications.md)
+            to verify factual consistency.
+
+            **Call out every issue clearly so the author can learn and fix it themselves.**
+
+            For each problem found — typo, wrong fact, stale reference, inconsistency,
+            style violation — describe it precisely: what is wrong, what the correct
+            value is, and which ground-truth doc confirms it.
+
+            **If you find issues:** submit REQUEST CHANGES. List every finding with the
+            file, line, what is wrong, and what it should be. Do not tag
+            ${{ inputs.owner_handle }} unless the issue requires a business or scope
+            decision that only they can make.
+
+            **If everything is correct:** submit APPROVED. No comment needed.
+
+            Only tag ${{ inputs.owner_handle }} when you hit a genuine ambiguity —
+            conflicting information across docs, a scope question, or a business
+            decision. In that case explain exactly what you need resolved.
