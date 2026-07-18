@@ -22,6 +22,18 @@ None.
 
 ## Recently completed
 
+### PR Checks reusable workflow (feat/pr-checks-reusable, 2026-07-18)
+
+Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs:
+
+1. **PR body** (`pr-body`): validates required sections (configurable, default `## Summary,## Test plan`), minimum body length (50 chars), and absence of AI/Claude attribution phrases
+2. **Branch name** (`branch-name`): validates branch matches a configurable ERE pattern (default `^(feature|feat|fix|docs|chore|refactor|test)/`); long-lived branches (`main`, `development`, `staging`) are always skipped
+3. **Doc consistency** (`doc-consistency`): skipped when `prohibited_patterns` input is empty; otherwise diffs the PR against `base_ref`, filters changed files by `doc_path_filter` prefix, and runs each `PATTERN|||MESSAGE` pair as a case-insensitive `grep -E` check — reports failures as GitHub error annotations with up to 5 matching lines shown
+
+No secrets or external services required. Callers pass repo-specific prohibited patterns as a newline-separated multiline input; comment lines (starting with `#`) are skipped.
+
+First consumer: `doublewolfconsulting/boreas-website` PR #76 (adds caller workflow + `CODEOWNERS`).
+
 ### index-notify: URL_DELETED support (28 June 2026)
 
 - Added optional `deleted_urls` input to both `workflow_call` and `workflow_dispatch` triggers (default `''`)
