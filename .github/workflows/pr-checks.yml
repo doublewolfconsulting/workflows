@@ -6,8 +6,9 @@ name: PR Checks (Reusable)
 #       uses: doublewolfconsulting/workflows/.github/workflows/pr-checks.yml@main
 #       with:
 #         prohibited_patterns: |
-#           bad pattern|||Human-readable error message
-#           another pattern|||Another message
+#           bad pattern|||Error message shown in annotation
+#         required_patterns: |
+#           must-exist pattern|||Message if pattern is missing
 
 on:
   workflow_call:
@@ -15,30 +16,37 @@ on:
       required_sections:
         description: >
           Comma-separated list of required PR body section headers.
-          Default checks for Summary and Test plan.
         type: string
         default: "## Summary,## Test plan"
 
       branch_pattern:
         description: >
           Extended regex (grep -E) that branch names must match.
-          PRs against main/development/staging are always allowed.
+          Long-lived branches (main, development, staging) are always allowed.
         type: string
         default: "^(feature|feat|fix|docs|chore|refactor|test)/"
 
       doc_path_filter:
         description: >
-          File path prefix used to scope doc consistency checks.
-          Only changed files whose path starts with this value are checked.
+          File path prefix to scope doc consistency checks.
         type: string
         default: "docs/"
 
       prohibited_patterns:
         description: >
-          Newline-separated list of "PATTERN|||MESSAGE" pairs.
-          PATTERN is a case-insensitive grep -E expression.
-          MESSAGE is shown in the GitHub annotation when the pattern matches.
-          Leave empty (default) to skip doc consistency checks entirely.
+          Newline-separated PATTERN|||MESSAGE pairs.
+          PATTERN is case-insensitive grep -E. Fails if pattern IS found.
+          Leave empty to skip.
+        type: string
+        default: ""
+
+      required_patterns:
+        description: >
+          Newline-separated PATTERN|||MESSAGE pairs.
+          PATTERN is case-insensitive grep -E. Fails if pattern is NOT found
+          in ANY of the changed docs files. Use to assert things that must
+          always be present (e.g. a canonical field name, a required section).
+          Leave empty to skip.
         type: string
         default: ""
 
@@ -56,44 +64,20 @@ jobs:
             const errors = [];
 
             // Required sections
-            const sections = `${{ inputs.required_sections }}`
-              .split(',')
-              .map(s => s.trim())
-              .filter(Boolean);
-
-            for (const section of sections) {
-              if (!body.includes(section)) {
-                errors.push(`Missing required section: "${section}"`);
-              }
+            for (const section of `${{ inputs.required_sections }}`.split(',').map(s => s.trim()).filter(Boolean)) {
+              if (!body.includes(section)) errors.push(`Missing required section: "${section}"`);
             }
 
             // Minimum length
-            if (body.trim().length < 50) {
-              errors.push('PR body is too short — describe what changed and why');
+            if (body.trim().length < 50) errors.push('PR body is too short — describe what changed and why');
+
+            // No AI attribution
+            for (const phrase of ['generated with claude', 'claude code', 'co-authored-by: claude', 'co-authored-by: anthropic']) {
+              if (body.toLowerCase().includes(phrase)) errors.push(`PR body must not contain AI attribution ("${phrase}")`);
             }
 
-            // No AI/Claude attribution
-            const lower = body.toLowerCase();
-            const banned = [
-              'generated with claude',
-              'claude code',
-              'co-authored-by: claude',
-              'co-authored-by: anthropic',
-            ];
-            for (const phrase of banned) {
-              if (lower.includes(phrase)) {
-                errors.push(`PR body must not contain AI attribution ("${phrase}")`);
-              }
-            }
-
-            if (errors.length > 0) {
-              core.setFailed(
-                'PR body validation failed:\n' +
-                errors.map(e => `  • ${e}`).join('\n')
-              );
-            } else {
-              core.info('PR body OK');
-            }
+            if (errors.length > 0) core.setFailed('PR body validation failed:\n' + errors.map(e => `  • ${e}`).join('\n'));
+            else core.info('PR body OK');
 
   # ── 2. Branch naming ────────────────────────────────────────────────────────
   branch-name:
@@ -103,26 +87,20 @@ jobs:
       - name: Check branch naming convention
         run: |
           BRANCH="${{ github.head_ref }}"
-          PATTERN="${{ inputs.branch_pattern }}"
-
-          # Long-lived branches are always fine
           case "$BRANCH" in
             main|development|staging|master) echo "Long-lived branch — skipping"; exit 0 ;;
           esac
-
-          if ! echo "$BRANCH" | grep -qE "$PATTERN"; then
-            echo "::error::Branch '$BRANCH' does not match required pattern: $PATTERN"
-            echo "Valid prefixes: feature/, feat/, fix/, docs/, chore/, refactor/, test/"
+          if ! echo "$BRANCH" | grep -qE "${{ inputs.branch_pattern }}"; then
+            echo "::error::Branch '$BRANCH' does not match required pattern: ${{ inputs.branch_pattern }}"
             exit 1
           fi
-
           echo "Branch name OK: $BRANCH"
 
   # ── 3. Doc consistency ──────────────────────────────────────────────────────
   doc-consistency:
     name: Doc consistency
     runs-on: ubuntu-latest
-    if: inputs.prohibited_patterns != ''
+    if: inputs.prohibited_patterns != '' || inputs.required_patterns != ''
     steps:
       - uses: actions/checkout@v4
         with:
@@ -140,43 +118,54 @@ jobs:
             echo "No files under ${{ inputs.doc_path_filter }} changed — skipping"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "Changed docs files:"
-            cat changed_docs.txt
+            echo "Changed docs files:"; cat changed_docs.txt
           fi
 
-      - name: Run prohibited pattern checks
-        if: steps.changed.outputs.skip == 'false'
+      - name: Check prohibited patterns
+        if: steps.changed.outputs.skip == 'false' && inputs.prohibited_patterns != ''
         env:
           PATTERNS: ${{ inputs.prohibited_patterns }}
         run: |
           FAILED=0
-          printf '%s\n' "$PATTERNS" > /tmp/patterns.txt
+          printf '%s\n' "$PATTERNS" > /tmp/prohibited.txt
 
           while IFS= read -r line; do
-            # Skip blank lines and comment lines
             [[ -z "$line" || "$line" == \#* ]] && continue
+            PATTERN="${line%%|||*}"; MESSAGE="${line##*|||}"
 
-            PATTERN="${line%%|||*}"
-            MESSAGE="${line##*|||}"
-
-            while IFS= read -r filepath; do
-              [[ -z "$filepath" || ! -f "$filepath" ]] && continue
-
-              if grep -qiE "$PATTERN" "$filepath"; then
-                echo "::error file=$filepath::$MESSAGE"
-                grep -niE "$PATTERN" "$filepath" | head -5 | \
-                  while IFS= read -r hit; do echo "    → $hit"; done
+            while IFS= read -r f; do
+              [[ -z "$f" || ! -f "$f" ]] && continue
+              if grep -qiE "$PATTERN" "$f"; then
+                echo "::error file=$f::$MESSAGE"
+                grep -niE "$PATTERN" "$f" | head -5 | while IFS= read -r hit; do echo "    → $hit"; done
                 FAILED=1
               fi
             done < changed_docs.txt
+          done < /tmp/prohibited.txt
 
-          done < /tmp/patterns.txt
+          [ "$FAILED" -eq 1 ] && { echo ""; echo "Prohibited pattern checks failed. See CLAUDE.md for ground-truth references."; exit 1; }
+          echo "Prohibited pattern checks passed."
 
-          if [ "$FAILED" -eq 1 ]; then
-            echo ""
-            echo "One or more doc consistency checks failed."
-            echo "See CLAUDE.md §'Documentation consistency checks' for ground-truth references."
-            exit 1
-          fi
+      - name: Check required patterns
+        if: steps.changed.outputs.skip == 'false' && inputs.required_patterns != ''
+        env:
+          PATTERNS: ${{ inputs.required_patterns }}
+        run: |
+          FAILED=0
+          printf '%s\n' "$PATTERNS" > /tmp/required.txt
 
-          echo "All doc consistency checks passed."
+          while IFS= read -r line; do
+            [[ -z "$line" || "$line" == \#* ]] && continue
+            PATTERN="${line%%|||*}"; MESSAGE="${line##*|||}"
+
+            while IFS= read -r f; do
+              [[ -z "$f" || ! -f "$f" ]] && continue
+              if ! grep -qiE "$PATTERN" "$f"; then
+                echo "::error file=$f::$MESSAGE"
+                FAILED=1
+              fi
+            done < changed_docs.txt
+          done < /tmp/required.txt
+
+          [ "$FAILED" -eq 1 ] && { echo ""; echo "Required pattern checks failed. See CLAUDE.md for ground-truth references."; exit 1; }
+          echo "Required pattern checks passed."

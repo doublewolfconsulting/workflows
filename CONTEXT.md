@@ -26,17 +26,20 @@ None.
 
 Added `.github/workflows/auto-review.yml` — a reusable `workflow_call` workflow that runs Claude Code as an automated PR reviewer. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Max subscription, not API-billed). Callers control path triggers and pass `additional_context` to inject repo-specific ground-truth facts into the review prompt.
 
-Agent calls out every issue precisely (file, line, what is wrong, correct value, which doc confirms it) so authors learn and fix themselves. `contents: read` only — no write access. Approves silently when correct. Tags `owner_handle` only for genuine business/scope ambiguity that cannot be resolved from the docs.
+Agent is instructed to **fix issues directly** (edit + commit to the PR branch) rather than just reporting them. Only escalates to `owner_handle` when the issue requires a business or scope decision. Approves silently when everything is correct. Requires `contents: write` permission so the agent can commit fixes.
 
-### PR Checks reusable workflow (feat/pr-checks-reusable, 2026-07-18)
+### PR Checks reusable workflow (feat/pr-checks-v2, 2026-07-18)
 
 Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs:
 
 1. **PR body** (`pr-body`): validates required sections (configurable, default `## Summary,## Test plan`), minimum body length (50 chars), and absence of AI/Claude attribution phrases
 2. **Branch name** (`branch-name`): validates branch matches a configurable ERE pattern (default `^(feature|feat|fix|docs|chore|refactor|test)/`); long-lived branches (`main`, `development`, `staging`) are always skipped
-3. **Doc consistency** (`doc-consistency`): skipped when `prohibited_patterns` input is empty; otherwise diffs the PR against `base_ref`, filters changed files by `doc_path_filter` prefix, and runs each `PATTERN|||MESSAGE` pair as a case-insensitive `grep -E` check — reports failures as GitHub error annotations with up to 5 matching lines shown
+3. **Doc consistency** (`doc-consistency`): skipped when both pattern inputs are empty; otherwise diffs the PR against `base_ref`, filters changed files by `doc_path_filter` prefix, and runs:
+   - **`prohibited_patterns`**: `PATTERN|||MESSAGE` pairs — fails if pattern IS found (e.g. wrong fund count, wrong S3 bucket name)
+   - **`required_patterns`**: `PATTERN|||MESSAGE` pairs — fails if pattern is NOT found (e.g. canonical field name, required section header)
+   Both use case-insensitive `grep -E`; comment lines (`#`) are skipped; failures shown as GitHub error annotations.
 
-No secrets or external services required. Callers pass repo-specific prohibited patterns as a newline-separated multiline input; comment lines (starting with `#`) are skipped.
+No secrets or external services required.
 
 ### index-notify: URL_DELETED support (28 June 2026)
 
