@@ -32,8 +32,6 @@ Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow 
 
 No secrets or external services required. Callers pass repo-specific prohibited patterns as a newline-separated multiline input; comment lines (starting with `#`) are skipped.
 
-First consumer: `doublewolfconsulting/boreas-website` PR #76 (adds caller workflow + `CODEOWNERS`).
-
 ### index-notify: URL_DELETED support (28 June 2026)
 
 - Added optional `deleted_urls` input to both `workflow_call` and `workflow_dispatch` triggers (default `''`)
