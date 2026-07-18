@@ -35,17 +35,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout client repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout template repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: ${{ inputs.template_repo }}
           path: _template
           token: ${{ secrets.TEMPLATE_WRITE_TOKEN }}
 
       - name: Checkout workflows repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: doublewolfconsulting/workflows
           path: _wf
