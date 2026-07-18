@@ -5,6 +5,7 @@ name: Auto Review (Reusable)
 #     review:
 #       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
 #       with:
+#         owner_handle: '@yourhandle'
 #         additional_context: |
 #           Repo-specific facts Claude should check against...
 #       secrets:
@@ -13,17 +14,21 @@ name: Auto Review (Reusable)
 on:
   workflow_call:
     inputs:
+      owner_handle:
+        description: >
+          GitHub handle to tag in the review when Claude is not confident
+          or finds issues that need human judgement (e.g. '@doublewolfconsulting').
+        type: string
+        required: true
       additional_context:
         description: >
           Repo-specific context injected into the review prompt.
-          Use this to list ground-truth facts Claude should verify
-          changed files against (e.g. correct field names, S3 paths,
-          schedule times, fund counts).
+          List ground-truth facts Claude should verify changed files against.
         type: string
         default: ''
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
-        description: Claude Code OAuth token (from Claude Max subscription)
+        description: Claude Code OAuth token (Claude Max subscription)
         required: true
 
 jobs:
@@ -52,3 +57,22 @@ jobs:
           prompt: |
             /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
             ${{ inputs.additional_context != '' && format('\n\nAdditional context for this repo:\n\n{0}', inputs.additional_context) || '' }}
+
+            ---
+
+            After completing your review, make a clear decision:
+
+            **If everything looks correct and you are confident:**
+            Submit an APPROVED review. No need to involve a human.
+
+            **If you find real issues or factual errors:**
+            Submit a REQUEST CHANGES review. List each issue clearly.
+            Tag ${{ inputs.owner_handle }} in your comment so they are notified.
+
+            **If you are uncertain or the change requires context you don't have:**
+            Post a COMMENT (do not approve or request changes).
+            Tag ${{ inputs.owner_handle }} and explain specifically what you are
+            unsure about so they can make the call.
+
+            Do not tag ${{ inputs.owner_handle }} on a clean, confident approval —
+            they should only hear from you when their input is genuinely needed.
