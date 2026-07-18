@@ -1,13 +1,23 @@
 name: Auto Review (Reusable)
 
-# Called from individual repos via:
+# Recommended caller trigger:
+#
+#   on:
+#     pull_request:
+#       branches: [main]
+#       types: [opened, synchronize, reopened, ready_for_review]
+#
 #   jobs:
 #     review:
+#       if: github.event.pull_request.draft == false
+#       concurrency:
+#         group: auto-review-${{ github.event.pull_request.number }}
+#         cancel-in-progress: true
 #       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
 #       with:
 #         owner_handle: '@yourhandle'
 #         additional_context: |
-#           Repo-specific facts Claude should check against...
+#           Repo-specific facts...
 #       secrets:
 #         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
@@ -16,19 +26,20 @@ on:
     inputs:
       owner_handle:
         description: >
-          GitHub handle to tag in the review when Claude is not confident
-          or finds issues that need human judgement (e.g. '@doublewolfconsulting').
+          GitHub handle to tag only when an issue cannot be resolved without
+          human judgement (e.g. a business decision, ambiguous scope).
         type: string
         required: true
       additional_context:
         description: >
-          Repo-specific context injected into the review prompt.
-          List ground-truth facts Claude should verify changed files against.
+          Repo-specific context — ground-truth facts, coding standards,
+          architecture notes. Claude reads the repo directly but this gives
+          it fast orientation.
         type: string
         default: ''
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
-        description: Claude Code OAuth token (Claude Max subscription)
+        description: Claude Code OAuth token (Claude Max subscription, not API-billed)
         required: true
 
 jobs:
@@ -36,7 +47,7 @@ jobs:
     name: Claude review
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
       id-token: write
@@ -60,19 +71,21 @@ jobs:
 
             ---
 
-            After completing your review, make a clear decision:
+            For any changed file, also read the source-of-truth docs (CLAUDE.md,
+            docs/prd.md, docs/data-pipeline.md, docs/field-specifications.md)
+            to verify factual consistency.
 
-            **If everything looks correct and you are confident:**
-            Submit an APPROVED review. No need to involve a human.
+            **Your job is to fix issues, not just report them.**
 
-            **If you find real issues or factual errors:**
-            Submit a REQUEST CHANGES review. List each issue clearly.
-            Tag ${{ inputs.owner_handle }} in your comment so they are notified.
+            For any problem you find — typos, wrong facts, stale references,
+            inconsistencies, style issues — fix it directly by editing the file
+            and committing to this branch. Then approve the PR.
 
-            **If you are uncertain or the change requires context you don't have:**
-            Post a COMMENT (do not approve or request changes).
-            Tag ${{ inputs.owner_handle }} and explain specifically what you are
-            unsure about so they can make the call.
+            Only escalate to ${{ inputs.owner_handle }} when the issue genuinely
+            requires human judgement: a business decision, an ambiguous scope
+            question, or a change that conflicts with information you don't have
+            access to. In that case submit REQUEST CHANGES, explain the specific
+            question clearly, and tag ${{ inputs.owner_handle }}.
 
-            Do not tag ${{ inputs.owner_handle }} on a clean, confident approval —
-            they should only hear from you when their input is genuinely needed.
+            When everything is correct (whether you fixed things or not):
+            submit APPROVED. No need to involve anyone.

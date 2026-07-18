@@ -26,6 +26,8 @@ None.
 
 Added `.github/workflows/auto-review.yml` — a reusable `workflow_call` workflow that runs Claude Code as an automated PR reviewer. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Max subscription, not API-billed). Callers control path triggers and pass `additional_context` to inject repo-specific ground-truth facts into the review prompt.
 
+Agent is instructed to **fix issues directly** (edit + commit to the PR branch) rather than just reporting them. Only escalates to `owner_handle` when the issue requires a business or scope decision. Approves silently when everything is correct. Requires `contents: write` permission so the agent can commit fixes.
+
 ### PR Checks reusable workflow (feat/pr-checks-reusable, 2026-07-18)
 
 Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs:
