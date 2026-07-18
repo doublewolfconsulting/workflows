@@ -22,11 +22,13 @@ None.
 
 ## Recently completed
 
-### Auto Review reusable workflow (feat/auto-review-reusable, 2026-07-18)
+### PR Review reusable workflow (fix/auto-review-direct-prompt, 2026-07-18)
 
-Added `.github/workflows/auto-review.yml` — a reusable `workflow_call` workflow that runs Claude Code as an automated PR reviewer. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Max subscription, not API-billed). Callers control path triggers and pass `additional_context` to inject repo-specific ground-truth facts into the review prompt.
+Added `.github/workflows/auto-review.yml` — a reusable `workflow_call` workflow that runs Claude Code as an automated PR reviewer. Uses `ANTHROPIC_API_KEY` with `claude-sonnet-4-6` pinned for cost efficiency. Callers control path triggers and pass `additional_context` to inject repo-specific ground-truth facts into the review prompt.
 
-Agent calls out every issue precisely (file, line, what is wrong, correct value, which doc confirms it) so authors learn and fix themselves. `contents: read` only — no write access. Approves silently when correct. Tags `owner_handle` only for genuine business/scope ambiguity that cannot be resolved from the docs.
+Agent uses a direct prompt: reads `gh pr diff`, reads source-of-truth docs, then calls `gh pr review --request-changes` or `--approve`. Calls out every issue precisely (file, line, what is wrong, correct value, which doc confirms it) so authors learn and fix themselves. `contents: read` only — no write access. Approves silently when correct. Tags `owner_handle` only for genuine business/scope ambiguity that cannot be resolved from the docs.
+
+Caller must include explicit `permissions:` block (contents: read, pull-requests: write, issues: write, id-token: write, actions: read) and `fetch-depth: 0` is set in the workflow for `gh pr diff` to work correctly.
 
 ### PR Checks reusable workflow (feat/pr-checks-v2, 2026-07-18)
 
