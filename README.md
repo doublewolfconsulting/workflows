@@ -6,17 +6,17 @@ Dependabot is configured to open weekly PRs for npm and GitHub Actions version b
 
 ---
 
-## Auto Review
+## PR Review
 
 **File:** `.github/workflows/auto-review.yml`
 
-Runs Claude Code as an automated reviewer on every non-draft PR. Reviews the whole repo (diff + ground-truth docs), calls out every issue precisely so the author can learn and fix, then approves or requests changes. No `@claude review` needed. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Claude Max subscription) — not API-billed.
+Runs Claude Code as an automated reviewer on every non-draft PR. Reviews the whole repo (diff + ground-truth docs), calls out every issue precisely so the author can learn and fix, then approves or requests changes. No `@claude review` needed. Uses `ANTHROPIC_API_KEY` (pay-per-token, Sonnet 4.6 pinned for cost efficiency).
 
 ### Usage
 
 ```yaml
 # .github/workflows/auto-review.yml
-name: Auto Review
+name: PR Review
 
 on:
   pull_request:
@@ -27,8 +27,14 @@ jobs:
   review:
     if: github.event.pull_request.draft == false
     concurrency:
-      group: auto-review-${{ github.event.pull_request.number }}
+      group: pr-review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
     uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
     with:
       owner_handle: '@yourhandle'
@@ -36,7 +42,7 @@ jobs:
         Any repo-specific facts Claude should verify changed files against.
         E.g. correct field names, S3 paths, schedule times, fund counts.
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### Inputs
@@ -50,7 +56,7 @@ jobs:
 
 | Secret | Description |
 |--------|-------------|
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token from your Claude Max subscription |
+| `ANTHROPIC_API_KEY` | Anthropic API key (same key used by PSI monitor and template sync). Sonnet 4.6 is pinned to keep costs low. |
 
 ### How it works
 

@@ -1,4 +1,4 @@
-name: Auto Review (Reusable)
+name: PR Review (Reusable)
 
 # Recommended caller trigger:
 #
@@ -11,7 +11,7 @@ name: Auto Review (Reusable)
 #     review:
 #       if: github.event.pull_request.draft == false
 #       concurrency:
-#         group: auto-review-${{ github.event.pull_request.number }}
+#         group: pr-review-${{ github.event.pull_request.number }}
 #         cancel-in-progress: true
 #       permissions:
 #         contents: read
@@ -63,21 +63,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Run automated Claude review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--model claude-sonnet-4-6"
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
+          claude_args: "--model claude-sonnet-4-6 --max-turns 15"
           prompt: |
-            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
-            ${{ inputs.additional_context != '' && format('\n\nAdditional context for this repo:\n\n{0}', inputs.additional_context) || '' }}
+            Review PR #${{ github.event.pull_request.number }} in this repository.
 
-            ---
+            The PR is from branch `${{ github.head_ref }}` into `${{ github.base_ref }}`.
+            PR title: ${{ github.event.pull_request.title }}
 
+            ${{ inputs.additional_context != '' && format('Additional context for this repo:\n\n{0}\n', inputs.additional_context) || '' }}
+            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
             For any changed file, also read the source-of-truth docs (CLAUDE.md,
             docs/prd.md, docs/data-pipeline.md, docs/field-specifications.md)
             to verify factual consistency.
@@ -88,13 +88,10 @@ jobs:
             style violation — describe it precisely: what is wrong, what the correct
             value is, and which ground-truth doc confirms it.
 
-            **If you find issues:** submit REQUEST CHANGES. List every finding with the
-            file, line, what is wrong, and what it should be. Do not tag
-            ${{ inputs.owner_handle }} unless the issue requires a business or scope
-            decision that only they can make.
+            **If you find issues:** use `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."` to request changes. List every finding with the file, line, what is wrong, and what it should be. Do not tag ${{ inputs.owner_handle }} unless the issue requires a business or scope decision that only they can make.
 
-            **If everything is correct:** submit APPROVED. No comment needed.
+            **If everything is correct:** use `gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"`.
 
-            Only tag ${{ inputs.owner_handle }} when you hit a genuine ambiguity ---
+            Only tag ${{ inputs.owner_handle }} when you hit a genuine ambiguity —
             conflicting information across docs, a scope question, or a business
             decision. In that case explain exactly what you need resolved.
