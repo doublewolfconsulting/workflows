@@ -13,13 +13,19 @@ name: Auto Review (Reusable)
 #       concurrency:
 #         group: auto-review-${{ github.event.pull_request.number }}
 #         cancel-in-progress: true
+#       permissions:
+#         contents: read
+#         pull-requests: write
+#         issues: write
+#         id-token: write
+#         actions: read
 #       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
 #       with:
 #         owner_handle: '@yourhandle'
 #         additional_context: |
 #           Repo-specific facts...
 #       secrets:
-#         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+#         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
 on:
   workflow_call:
@@ -38,8 +44,8 @@ on:
         type: string
         default: ''
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN:
-        description: Claude Code OAuth token (Claude Max subscription, not API-billed)
+      ANTHROPIC_API_KEY:
+        description: Anthropic API key (same key used by PSI monitor and template sync)
         required: true
 
 jobs:
@@ -62,7 +68,7 @@ jobs:
       - name: Run automated Claude review
         uses: anthropics/claude-code-action@v1
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
           prompt: |
