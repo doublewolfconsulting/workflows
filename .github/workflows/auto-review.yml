@@ -47,7 +47,7 @@ jobs:
     name: Claude review
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
       id-token: write
@@ -75,17 +75,19 @@ jobs:
             docs/prd.md, docs/data-pipeline.md, docs/field-specifications.md)
             to verify factual consistency.
 
-            **Your job is to fix issues, not just report them.**
+            **Call out every issue clearly so the author can learn and fix it themselves.**
 
-            For any problem you find — typos, wrong facts, stale references,
-            inconsistencies, style issues — fix it directly by editing the file
-            and committing to this branch. Then approve the PR.
+            For each problem found — typo, wrong fact, stale reference, inconsistency,
+            style violation — describe it precisely: what is wrong, what the correct
+            value is, and which ground-truth doc confirms it.
 
-            Only escalate to ${{ inputs.owner_handle }} when the issue genuinely
-            requires human judgement: a business decision, an ambiguous scope
-            question, or a change that conflicts with information you don't have
-            access to. In that case submit REQUEST CHANGES, explain the specific
-            question clearly, and tag ${{ inputs.owner_handle }}.
+            **If you find issues:** submit REQUEST CHANGES. List every finding with the
+            file, line, what is wrong, and what it should be. Do not tag
+            ${{ inputs.owner_handle }} unless the issue requires a business or scope
+            decision that only they can make.
 
-            When everything is correct (whether you fixed things or not):
-            submit APPROVED. No need to involve anyone.
+            **If everything is correct:** submit APPROVED. No comment needed.
+
+            Only tag ${{ inputs.owner_handle }} when you hit a genuine ambiguity —
+            conflicting information across docs, a scope question, or a business
+            decision. In that case explain exactly what you need resolved.
