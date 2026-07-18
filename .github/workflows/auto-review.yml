@@ -1,0 +1,54 @@
+name: Auto Review (Reusable)
+
+# Called from individual repos via:
+#   jobs:
+#     review:
+#       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
+#       with:
+#         additional_context: |
+#           Repo-specific facts Claude should check against...
+#       secrets:
+#         CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      additional_context:
+        description: >
+          Repo-specific context injected into the review prompt.
+          Use this to list ground-truth facts Claude should verify
+          changed files against (e.g. correct field names, S3 paths,
+          schedule times, fund counts).
+        type: string
+        default: ''
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        description: Claude Code OAuth token (from Claude Max subscription)
+        required: true
+
+jobs:
+  review:
+    name: Claude review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run automated Claude review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
+          plugins: 'code-review@claude-code-plugins'
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            ${{ inputs.additional_context != '' && format('\n\nAdditional context for this repo:\n\n{0}', inputs.additional_context) || '' }}

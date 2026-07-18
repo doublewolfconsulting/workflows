@@ -6,6 +6,59 @@ Dependabot is configured to open weekly PRs for npm and GitHub Actions version b
 
 ---
 
+## Auto Review
+
+**File:** `.github/workflows/auto-review.yml`
+
+Runs Claude Code as an automated reviewer on PRs. Posts a review comment without needing `@claude review`. Uses `CLAUDE_CODE_OAUTH_TOKEN` (Claude Max subscription) — not API-billed.
+
+Each calling repo controls which paths trigger the review and passes its own ground-truth context to inject into the prompt.
+
+### Usage
+
+```yaml
+# .github/workflows/auto-review.yml
+name: Auto Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docs/**'   # scope to where reviews add value
+
+jobs:
+  review:
+    uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
+    with:
+      additional_context: |
+        Any repo-specific facts Claude should verify changed files against.
+        E.g. correct field names, S3 paths, schedule times, fund counts.
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+```
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `additional_context` | No | `''` | Free-text context appended to the review prompt. Use to list ground-truth facts for the repo so Claude can flag deviations in changed docs or code. |
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token from your Claude Max subscription |
+
+### Notes
+
+- Runs Claude Code CLI as an agent (reads diff, posts review comment) — not a simple API call
+- Billed against Claude Max subscription, not Anthropic API pay-per-token
+- Scope the `paths:` filter in the caller to avoid triggering on trivial changes
+- The existing `@claude review` manual trigger (`claude-code-review.yml`) still works independently
+
+---
+
 ## PR Checks
 
 **File:** `.github/workflows/pr-checks.yml`
