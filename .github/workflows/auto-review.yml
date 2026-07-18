@@ -69,29 +69,28 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_args: "--model claude-sonnet-4-6 --max-turns 15"
+          claude_args: "--model claude-sonnet-4-6 --max-turns 30"
           prompt: |
             Review PR #${{ github.event.pull_request.number }} in this repository.
 
-            The PR is from branch `${{ github.head_ref }}` into `${{ github.base_ref }}`.
-            PR title: ${{ github.event.pull_request.title }}
+            PR: `${{ github.head_ref }}` → `${{ github.base_ref }}`
+            Title: ${{ github.event.pull_request.title }}
 
-            ${{ inputs.additional_context != '' && format('Additional context for this repo:\n\n{0}\n', inputs.additional_context) || '' }}
-            Use `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
-            For any changed file, also read the source-of-truth docs (CLAUDE.md,
-            docs/prd.md, docs/data-pipeline.md, docs/field-specifications.md)
-            to verify factual consistency.
+            ${{ inputs.additional_context != '' && format('## Repo context (ground truth)\n\n{0}\n', inputs.additional_context) || '' }}
+            ## Steps
 
-            **Call out every issue clearly so the author can learn and fix it themselves.**
+            1. Run `gh pr diff ${{ github.event.pull_request.number }}` to see the changes.
+            2. Check facts in the diff against the repo context above — that is your primary
+               ground truth. Only read additional files (CLAUDE.md, docs/prd.md,
+               docs/data-pipeline.md, docs/field-specifications.md) if a specific claim
+               in the diff is NOT covered by the context above and you need to verify it.
+            3. Post a review using one of:
+               - `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."`
+               - `gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"`
 
-            For each problem found — typo, wrong fact, stale reference, inconsistency,
-            style violation — describe it precisely: what is wrong, what the correct
-            value is, and which ground-truth doc confirms it.
+            For each problem found, state: file · line · what is wrong · correct value ·
+            which source confirms it. Do not tag ${{ inputs.owner_handle }} unless the
+            issue requires a business or scope decision only they can make.
 
-            **If you find issues:** use `gh pr review ${{ github.event.pull_request.number }} --request-changes --body "..."` to request changes. List every finding with the file, line, what is wrong, and what it should be. Do not tag ${{ inputs.owner_handle }} unless the issue requires a business or scope decision that only they can make.
-
-            **If everything is correct:** use `gh pr review ${{ github.event.pull_request.number }} --approve --body "LGTM"`.
-
-            Only tag ${{ inputs.owner_handle }} when you hit a genuine ambiguity —
-            conflicting information across docs, a scope question, or a business
-            decision. In that case explain exactly what you need resolved.
+            Only tag ${{ inputs.owner_handle }} for genuine ambiguity (conflicting docs,
+            scope question, business decision) — explain exactly what needs resolving.
