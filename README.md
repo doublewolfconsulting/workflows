@@ -71,8 +71,8 @@ In the caller repo, go to **Settings → Actions → General → Workflow permis
 
 For each issue found (typo, wrong fact, stale reference, inconsistency), the body states precisely: file · line · what is wrong · correct value · which source confirms it. The author fixes it; no repo writes.
 
-- **Issues found** → REQUEST CHANGES with detailed findings. Tags `owner_handle` only for genuine business/scope ambiguity.
-- **Everything correct** → APPROVED, body "LGTM".
+- **Issues found** → REQUEST CHANGES with detailed findings. The status check **fails** (exit 1), blocking the merge. Tags `owner_handle` only for genuine business/scope ambiguity.
+- **Everything correct** → APPROVED, body "LGTM". Status check passes.
 - Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
 
 ---
