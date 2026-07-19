@@ -71,7 +71,8 @@ OUTPUT RULES — these are strict:
 - If issues found: decision="request_changes", body lists each as: FILE · LINE · what is wrong · correct value · source
 - Tag ${OWNER_HANDLE} in body ONLY for genuine business/scope decisions that cannot be resolved from the docs
 - Do not invent issues that are not in the diff
-- prohibited_patterns in pr-checks.yml are matched with grep -iE (case-insensitive extended regex) against docs/ files only — do not flag patterns as case-sensitive`;
+- The diff shows only what changed in this PR — facts already present in the file from prior commits are NOT in the diff but are still present in the final file state. Do not flag "missing" content unless you can confirm it was removed in this diff.
+- prohibited_patterns in pr-checks.yml use grep -iE (case-insensitive) and are scoped to docs/ files only (doc_path_filter default). CLAUDE.md and root files are never scanned. Unqualified patterns for invented field names are intentional — any mention in docs/ is suspicious by design.`;
 
 const res = await fetch('https://api.anthropic.com/v1/messages', {
   method: 'POST',
