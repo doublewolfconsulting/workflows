@@ -54,21 +54,19 @@ ${contextBlock}## Diff
 ${diff}
 \`\`\`
 
-## Task
+## Instructions
 
 Review the diff against the repo ground truth. Check for:
 - Factual errors (wrong numbers, wrong names, wrong paths, wrong schedules)
 - Typos or stale references
 - Code correctness or standard violations
 
-Respond with a JSON object (no markdown fences) in exactly this shape:
-{"decision":"approve","body":"review text"}
-
-Rules:
+OUTPUT RULES — these are strict:
+- Your ENTIRE response must be ONLY a single JSON object. No preamble, no explanation, no markdown fences.
+- Shape: {"decision":"approve","body":"text"} or {"decision":"request_changes","body":"text"}
 - If everything is correct: decision="approve", body="LGTM"
-- If there are issues: decision="request_changes", body lists each finding:
-  FILE · LINE · what is wrong · correct value · which source confirms it
-- Tag ${OWNER_HANDLE} in body ONLY for genuine business/scope decisions
+- If issues found: decision="request_changes", body lists each as: FILE · LINE · what is wrong · correct value · source
+- Tag ${OWNER_HANDLE} in body ONLY for genuine business/scope decisions that cannot be resolved from the docs
 - Do not invent issues that are not in the diff`;
 
 const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -94,23 +92,26 @@ if (!res.ok) {
 const data = await res.json();
 const text = data.content[0].text.trim();
 
-let result;
-try {
-  result = JSON.parse(text);
-} catch {
+// Parse JSON — try direct parse first, then extract the first {...} block as fallback
+function extractJson(str) {
+  try { return JSON.parse(str); } catch {}
+  const start = str.indexOf('{');
+  const end = str.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(str.slice(start, end + 1)); } catch {}
+  }
+  return null;
+}
+
+const result = extractJson(text);
+if (!result || !result.decision || !result.body) {
   console.error('Failed to parse Claude response as JSON:', text);
   process.exit(1);
 }
 
-const { decision, body } = result;
-if (!decision || !body) {
-  console.error('Unexpected response shape:', result);
-  process.exit(1);
-}
+console.log(`Decision: ${result.decision}`);
+console.log(`Body:\n${result.body}`);
 
-console.log(`Decision: ${decision}`);
-console.log(`Body:\n${body}`);
-
-const flag = decision === 'approve' ? '--approve' : '--request-changes';
-execSync(`gh pr review ${PR_NUMBER} ${flag} --body ${JSON.stringify(body)}`, { stdio: 'inherit' });
+const flag = result.decision === 'approve' ? '--approve' : '--request-changes';
+execSync(`gh pr review ${PR_NUMBER} ${flag} --body ${JSON.stringify(result.body)}`, { stdio: 'inherit' });
 console.log('Review posted.');
