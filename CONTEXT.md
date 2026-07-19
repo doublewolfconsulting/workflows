@@ -22,13 +22,19 @@ None.
 
 ## Recently completed
 
-### PR Review reusable workflow (2026-07-18)
+### PR Review reusable workflow (2026-07-18, fixes 2026-07-20)
 
 Added `.github/workflows/auto-review.yml` + `scripts/pr-review.mjs`. Reusable `workflow_call` workflow that reviews every non-draft PR via a single Anthropic API call — no agentic loop.
 
-**How it works:** checks out caller repo + this workflows repo into `_wf/`, runs `npm ci` (no new dependencies; fetch is built-in), then `node _wf/scripts/pr-review.mjs`. The script calls `gh pr diff`, makes one API call to Claude Sonnet 4.6 with diff + `additional_context`, parses the JSON response, and posts `gh pr review --approve` or `--request-changes`.
+**How it works:** checks out caller repo + this workflows repo into `_wf/`, runs `node _wf/scripts/pr-review.mjs`. The script calls `gh pr diff`, makes one API call to Claude Sonnet 4.6 with diff + `additional_context`, parses the JSON response, and posts `gh pr review --approve` or `--request-changes`.
 
 Cost: ~$0.02–0.05 per review. Caller must include explicit `permissions:` block and enable "Allow GitHub Actions to create and approve pull requests" in the repo's Actions settings.
+
+**Fixes applied (PRs #53–56, 2026-07-20):**
+- `--body-file` instead of `--body` — review bodies containing regex special chars (`(`, `)`, `\`) broke shell quoting when passed inline
+- Status check now exits 1 on `request_changes` — previously always exited 0, making the check green even when changes were requested
+- `max_tokens` raised from 1024 to 2048 — long review bodies were being truncated, causing JSON parse failure
+- Prompt clarifications: (1) diff shows only new changes — pre-existing file content is still present; (2) `prohibited_patterns` use `grep -iE` scoped to `docs/` only — unqualified patterns for invented fields are intentional
 
 ### PR Checks reusable workflow (feat/pr-checks-v2, 2026-07-18)
 
