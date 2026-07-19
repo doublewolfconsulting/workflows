@@ -14,6 +14,9 @@
  */
 
 import { execSync } from 'child_process';
+import { writeFileSync, unlinkSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const required = ['ANTHROPIC_API_KEY', 'PR_NUMBER', 'PR_TITLE', 'HEAD_REF', 'BASE_REF', 'OWNER_HANDLE'];
 for (const v of required) {
@@ -112,6 +115,13 @@ if (!result || !result.decision || !result.body) {
 console.log(`Decision: ${result.decision}`);
 console.log(`Body:\n${result.body}`);
 
-const flag = result.decision === 'approve' ? '--approve' : '--request-changes';
-execSync(`gh pr review ${PR_NUMBER} ${flag} --body ${JSON.stringify(result.body)}`, { stdio: 'inherit' });
-console.log('Review posted.');
+// Write body to a temp file to avoid shell quoting issues with special characters
+const bodyFile = join(tmpdir(), `pr-review-${PR_NUMBER}.txt`);
+writeFileSync(bodyFile, result.body, 'utf8');
+try {
+  const flag = result.decision === 'approve' ? '--approve' : '--request-changes';
+  execSync(`gh pr review ${PR_NUMBER} ${flag} --body-file ${JSON.stringify(bodyFile)}`, { stdio: 'inherit' });
+  console.log('Review posted.');
+} finally {
+  try { unlinkSync(bodyFile); } catch {}
+}
