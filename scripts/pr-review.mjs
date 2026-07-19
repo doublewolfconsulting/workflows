@@ -125,3 +125,9 @@ try {
 } finally {
   try { unlinkSync(bodyFile); } catch {}
 }
+
+// Fail the status check when changes are requested so it blocks the merge.
+if (result.decision !== 'approve') {
+  console.error('Changes requested — failing check.');
+  process.exit(1);
+}
