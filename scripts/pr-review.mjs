@@ -70,7 +70,8 @@ OUTPUT RULES — these are strict:
 - If everything is correct: decision="approve", body="LGTM"
 - If issues found: decision="request_changes", body lists each as: FILE · LINE · what is wrong · correct value · source
 - Tag ${OWNER_HANDLE} in body ONLY for genuine business/scope decisions that cannot be resolved from the docs
-- Do not invent issues that are not in the diff`;
+- Do not invent issues that are not in the diff
+- prohibited_patterns in pr-checks.yml are matched with grep -iE (case-insensitive extended regex) against docs/ files only — do not flag patterns as case-sensitive`;
 
 const res = await fetch('https://api.anthropic.com/v1/messages', {
   method: 'POST',
@@ -81,7 +82,7 @@ const res = await fetch('https://api.anthropic.com/v1/messages', {
   },
   body: JSON.stringify({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{ role: 'user', content: prompt }],
   }),
 });
