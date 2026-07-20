@@ -22,6 +22,15 @@ None.
 
 ## Recently completed
 
+### pr-checks: allow claude/ branch prefix (2026-07-20)
+
+`branch_pattern` default was `^(feature|feat|fix|docs|chore|refactor|test)/`, which rejected
+every AI-authored PR — Claude Code sessions are assigned `claude/<description>` branch names
+by the platform, not chosen per-repo, and this applies regardless of whether the session's
+work is docs or code. Added `claude` to the default pattern (and updated README). A prior fix
+attempt overrode `branch_pattern` locally in `boreas-website`'s own `pr-checks.yml` caller
+instead of here — that override should be removed now that the shared default covers it.
+
 ### PR Review reusable workflow (2026-07-18, fixes 2026-07-20)
 
 Added `.github/workflows/auto-review.yml` + `scripts/pr-review.mjs`. Reusable `workflow_call` workflow that reviews every non-draft PR via a single Anthropic API call — no agentic loop.
@@ -41,7 +50,7 @@ Cost: ~$0.02–0.05 per review. Caller must include explicit `permissions:` bloc
 Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs:
 
 1. **PR body** (`pr-body`): validates required sections (configurable, default `## Summary,## Test plan`), minimum body length (50 chars), and absence of AI/Claude attribution phrases
-2. **Branch name** (`branch-name`): validates branch matches a configurable ERE pattern (default `^(feature|feat|fix|docs|chore|refactor|test)/`); long-lived branches (`main`, `development`, `staging`) are always skipped
+2. **Branch name** (`branch-name`): validates branch matches a configurable ERE pattern (default `^(feature|feat|fix|docs|chore|refactor|test|claude)/`); long-lived branches (`main`, `development`, `staging`) are always skipped
 3. **Doc consistency** (`doc-consistency`): skipped when both pattern inputs are empty; otherwise diffs the PR against `base_ref`, filters changed files by `doc_path_filter` prefix, and runs:
    - **`prohibited_patterns`**: `PATTERN|||MESSAGE` pairs — fails if pattern IS found (e.g. wrong fund count, wrong S3 bucket name)
    - **`required_patterns`**: `PATTERN|||MESSAGE` pairs — fails if pattern is NOT found (e.g. canonical field name, required section header)

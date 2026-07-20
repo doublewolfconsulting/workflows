@@ -118,7 +118,7 @@ No secrets required.
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `required_sections` | No | `## Summary,## Test plan` | Comma-separated list of section headers that must appear in the PR body |
-| `branch_pattern` | No | `^(feature\|feat\|fix\|docs\|chore\|refactor\|test)/` | ERE regex that branch names must match |
+| `branch_pattern` | No | `^(feature\|feat\|fix\|docs\|chore\|refactor\|test\|claude)/` | ERE regex that branch names must match |
 | `doc_path_filter` | No | `docs/` | File path prefix to scope doc consistency checks |
 | `prohibited_patterns` | No | `''` (skips) | Newline-separated `PATTERN\|\|\|MESSAGE` pairs. Fails if pattern IS found in a changed docs file. |
 | `required_patterns` | No | `''` (skips) | Newline-separated `PATTERN\|\|\|MESSAGE` pairs. Fails if pattern is NOT found in a changed docs file. |
