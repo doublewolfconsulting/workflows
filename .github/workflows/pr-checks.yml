@@ -24,7 +24,7 @@ on:
           Extended regex (grep -E) that branch names must match.
           Long-lived branches (main, development, staging) are always allowed.
         type: string
-        default: "^(feature|feat|fix|docs|chore|refactor|test)/"
+        default: "^(feature|feat|fix|docs|chore|refactor|test|claude)/"
 
       doc_path_filter:
         description: >
