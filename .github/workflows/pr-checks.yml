@@ -71,6 +71,9 @@ jobs:
             // Minimum length
             if (body.trim().length < 50) errors.push('PR body is too short — describe what changed and why');
 
+            // Unchecked checkboxes
+            if (/^- \[ \]/m.test(body)) errors.push('PR body contains unchecked checkboxes — complete the test plan before merging');
+
             if (errors.length > 0) core.setFailed('PR body validation failed:\n' + errors.map(e => `  • ${e}`).join('\n'));
             else core.info('PR body OK');
 
