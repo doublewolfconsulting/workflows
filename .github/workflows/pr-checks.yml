@@ -71,11 +71,6 @@ jobs:
             // Minimum length
             if (body.trim().length < 50) errors.push('PR body is too short — describe what changed and why');
 
-            // No AI attribution
-            for (const phrase of ['generated with claude', 'claude code', 'co-authored-by: claude', 'co-authored-by: anthropic']) {
-              if (body.toLowerCase().includes(phrase)) errors.push(`PR body must not contain AI attribution ("${phrase}")`);
-            }
-
             if (errors.length > 0) core.setFailed('PR body validation failed:\n' + errors.map(e => `  • ${e}`).join('\n'));
             else core.info('PR body OK');
 

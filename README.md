@@ -85,7 +85,7 @@ Runs on every PR against `main`. Validates PR hygiene and catches known doc cons
 
 Three jobs run in parallel:
 
-1. **PR body** — required sections present (configurable), minimum length, no AI/Claude attribution
+1. **PR body** — required sections present (configurable), minimum length
 2. **Branch name** — must match naming convention (configurable regex); long-lived branches (`main`, `development`, `staging`) are always allowed
 3. **Doc consistency** — changed files under a configurable path prefix are scanned for `prohibited_patterns` (must not be present) and `required_patterns` (must be present). Both are optional.
 
@@ -140,6 +140,63 @@ s3://boreas-documents|||Wrong S3 bucket — use boreas-fund-data/documents/
 ### Setup
 
 No secrets or external services needed. Add the caller workflow and optionally a `CODEOWNERS` file to enforce required reviewers via branch protection.
+
+---
+
+## PR Labels
+
+**File:** `.github/workflows/pr-labels.yml`
+
+Auto-labels PRs against `main` as `ai-authored` or `ai-assisted`, so it's visible at a glance
+whether a PR came from an autonomous agent session or from a human who used AI tooling along
+the way. Creates both labels in the repo on first use if they don't already exist. Purely
+GitHub-metadata based — no Anthropic call, no secrets.
+
+### Usage
+
+```yaml
+# .github/workflows/pr-labels.yml
+name: PR Labels
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  labels:
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    uses: doublewolfconsulting/workflows/.github/workflows/pr-labels.yml@main
+```
+
+No secrets required.
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `ai_authored_branch_prefix` | No | `claude/` | Branch-name prefix that marks a PR as fully AI-generated |
+| `ai_assisted_patterns` | No | see workflow file | Newline-separated case-insensitive ERE patterns, checked against the PR body + every commit message. Any match labels the PR `ai-assisted`. `#`-comment lines are ignored. |
+
+### How it works
+
+1. **`ai-authored`** — if the PR's head branch starts with `ai_authored_branch_prefix`
+   (default `claude/`), that's the whole signal: branch names are platform-assigned for
+   autonomous sessions, not self-reported, so one check is enough.
+2. **`ai-assisted`** — otherwise, checks the PR body *and* every commit message in the PR
+   against a bank of patterns covering multiple signal types (commit trailers like
+   `Co-Authored-By: Claude`, tool footers like "Generated with Claude Code", session links,
+   generic phrasing) — not just one exact format, since relying on a single trailer convention
+   is too easy to miss. Any single match anywhere in that combined text is sufficient.
+3. If neither signal is found, no label is applied or changed — a human can label a PR
+   `ai-assisted` manually in that case.
+4. The two labels are kept mutually exclusive: applying one removes the other if present.
+
+Note: `pr-checks.yml`'s "PR body" check no longer fails on AI-attribution phrases (see below) —
+that's what makes scanning the PR body here safe and useful instead of adversarial.
 
 ---
 
