@@ -22,6 +22,13 @@ None.
 
 ## Recently completed
 
+### pr-checks: block merge on unchecked checkboxes (2026-07-21, PR #60)
+
+Added unchecked-checkbox detection to the `pr-body` job. Any `- [ ]` in the PR body
+now fails with: "PR body contains unchecked checkboxes — complete the test plan before
+merging". Checked boxes (`- [x]`) and bodies with no checkboxes at all pass fine.
+Regex: `/^- \[ \]/m` (anchored to line start).
+
 ### pr-labels reusable workflow + drop AI-attribution failure (2026-07-20)
 
 Added `.github/workflows/pr-labels.yml`: auto-labels PRs against `main` as `ai-authored`
