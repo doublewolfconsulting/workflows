@@ -22,7 +22,7 @@ None.
 
 ## Recently completed
 
-### pr-checks: block merge on unchecked checkboxes (2026-07-21, PR #60)
+### pr-checks: block merge on unchecked checkboxes (2026-07-22, PR #60)
 
 Added unchecked-checkbox detection to the `pr-body` job. Any `- [ ]` in the PR body
 now fails with: "PR body contains unchecked checkboxes — complete the test plan before
