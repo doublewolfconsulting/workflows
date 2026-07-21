@@ -1,0 +1,131 @@
+name: PR Labels (Reusable)
+
+# Called from individual repos via:
+#   jobs:
+#     labels:
+#       permissions:
+#         contents: read
+#         pull-requests: write
+#         issues: write
+#       uses: doublewolfconsulting/workflows/.github/workflows/pr-labels.yml@main
+
+on:
+  workflow_call:
+    inputs:
+      ai_authored_branch_prefix:
+        description: >
+          Branch-name prefix that marks a PR as fully AI-generated (e.g. an
+          autonomous Claude Code session). Checked against the PR's head ref.
+        type: string
+        default: "claude/"
+
+      ai_assisted_patterns:
+        description: >
+          Newline-separated case-insensitive ERE patterns. Checked against the
+          PR body AND every commit message in the PR (not just one or the
+          other) — any single match is enough. Only evaluated when the branch
+          prefix check does not already mark the PR ai-authored. Lines
+          starting with # are ignored.
+        type: string
+        default: |
+          co-authored-by:\s*claude
+          co-authored-by:\s*anthropic
+          generated (with|by)\s*claude
+          claude code
+          🤖.*generated
+          claude\.ai/code
+          claude-session:
+          written (with|by) (claude|anthropic)
+          powered by claude
+          anthropic api
+
+jobs:
+  label:
+    name: AI authorship label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine and apply label
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const AUTHORED_LABEL = 'ai-authored';
+            const ASSISTED_LABEL = 'ai-assisted';
+            const LABELS = {
+              [AUTHORED_LABEL]: { color: '1D76DB', description: 'Fully AI-generated (e.g. an autonomous Claude Code session)' },
+              [ASSISTED_LABEL]: { color: '5319E7', description: 'Human-driven PR with AI assistance along the way' },
+            };
+
+            const prefix = `${{ inputs.ai_authored_branch_prefix }}`;
+            const headRef = context.payload.pull_request.head.ref;
+            const prNumber = context.payload.pull_request.number;
+
+            let target = null;
+
+            if (headRef.startsWith(prefix)) {
+              target = AUTHORED_LABEL;
+            } else {
+              const patterns = `${{ inputs.ai_assisted_patterns }}`
+                .split('\n')
+                .map(l => l.trim())
+                .filter(l => l && !l.startsWith('#'))
+                .map(p => new RegExp(p, 'i'));
+
+              const { data: commits } = await github.rest.pulls.listCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+              });
+
+              const blob = [
+                context.payload.pull_request.body ?? '',
+                ...commits.map(c => c.commit.message),
+              ].join('\n');
+
+              if (patterns.some(re => re.test(blob))) {
+                target = ASSISTED_LABEL;
+              }
+            }
+
+            if (!target) {
+              core.info('No AI-authorship signal found — leaving labels as-is.');
+              return;
+            }
+
+            async function ensureLabelExists(name) {
+              try {
+                await github.rest.issues.getLabel({ owner: context.repo.owner, repo: context.repo.repo, name });
+              } catch (err) {
+                if (err.status !== 404) throw err;
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color: LABELS[name].color,
+                  description: LABELS[name].description,
+                });
+                core.info(`Created missing label: ${name}`);
+              }
+            }
+
+            await ensureLabelExists(target);
+
+            const other = target === AUTHORED_LABEL ? ASSISTED_LABEL : AUTHORED_LABEL;
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                name: other,
+              });
+              core.info(`Removed stale label: ${other}`);
+            } catch (err) {
+              if (err.status !== 404) throw err;
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: [target],
+            });
+            core.info(`Applied label: ${target}`);
