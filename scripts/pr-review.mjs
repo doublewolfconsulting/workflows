@@ -66,7 +66,7 @@ Review the diff against the repo ground truth. Check for:
 OUTPUT RULES — these are strict:
 - Your ENTIRE response must be ONLY a single JSON object. No preamble, no explanation, no markdown fences.
 - Shape: {"decision":"approve","body":"text"} or {"decision":"request_changes","body":"text"}
-- If everything is correct: decision="approve", body="LGTM"
+- If everything is correct: decision="approve", body="LGTM". You MUST use decision="approve" when your conclusion is that there are no blocking issues. Using decision="request_changes" with a body that says LGTM or no blocking issues found is a violation of these rules.
 - If issues found: decision="request_changes", body lists each issue on its own line as: FILE · what is wrong · correct value · source. Keep each item concise (1-2 sentences max). Report only genuine blocking issues — skip style preferences or unresolvable ambiguities.
 - JSON formatting: use \\n for line breaks in the body string. Never escape single quotes (write ' not \\'). Never include raw newlines inside a JSON string value.
 - Do not invent issues that are not in the diff
@@ -112,6 +112,14 @@ const result = extractJson(text);
 if (!result || !result.decision || !result.body) {
   console.error('Failed to parse Claude response as JSON:', text);
   process.exit(1);
+}
+
+// Normalize decision/body mismatch: if body signals LGTM but decision is request_changes, correct it.
+const bodyLower = result.body.trim().toLowerCase();
+if (result.decision === 'request_changes' &&
+    (bodyLower.startsWith('lgtm') || bodyLower.startsWith('no blocking issues'))) {
+  console.warn('Decision/body mismatch detected — body says LGTM but decision was request_changes. Normalizing to approve.');
+  result.decision = 'approve';
 }
 
 console.log(`Decision: ${result.decision}`);
