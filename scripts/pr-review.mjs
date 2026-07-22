@@ -117,9 +117,17 @@ if (!result || !result.decision || !result.body) {
 console.log(`Decision: ${result.decision}`);
 console.log(`Body:\n${result.body}`);
 
+// Add visual indicators: ✅ per line for approve, ❌ per line for each issue
+let body = result.body;
+if (result.decision === 'approve') {
+  body = body.split('\n').map(line => line.trim() ? `✅ ${line}` : line).join('\n');
+} else {
+  body = body.split('\n').map(line => line.trim() ? `❌ ${line}` : line).join('\n');
+}
+
 // Write body to a temp file to avoid shell quoting issues with special characters
 const bodyFile = join(tmpdir(), `pr-review-${PR_NUMBER}.txt`);
-writeFileSync(bodyFile, result.body, 'utf8');
+writeFileSync(bodyFile, body, 'utf8');
 try {
   const flag = result.decision === 'approve' ? '--approve' : '--request-changes';
   execSync(`gh pr review ${PR_NUMBER} ${flag} --body-file ${JSON.stringify(bodyFile)}`, { stdio: 'inherit' });
