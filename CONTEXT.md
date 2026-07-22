@@ -22,6 +22,24 @@ None.
 
 ## Recently completed
 
+### pr-review: add ✅/❌ visual indicators to review body (2026-07-22, PR #64)
+
+Post-processes `result.body` in `pr-review.mjs` after Claude responds. Each line in an
+approved review is prefixed with ✅; each issue line in a change-requested review is
+prefixed with ❌. Makes the outcome immediately scannable in the GitHub PR timeline.
+
+### pr-review: raise max_tokens + fix JSON escaping + add diff-scope instruction (2026-07-22, PRs #62 & #63)
+
+**PR #62:** `max_tokens` raised from 2048 → 4096. Added JSON formatting rules to prompt:
+use `\n` not raw newlines, never escape single quotes (`'` not `\'`). Fixes JSON parse
+failures caused by truncated bodies or invalid escape sequences in long review responses.
+
+**PR #63:** Added explicit diff-scope instruction to prompt: "Only flag content in '+' or
+context lines. NEVER flag content from '-' lines as a current problem. Do not say 'may not
+have been removed' or 'confirm if still present' — if you cannot confirm something is in a
+'+' or context line, do not flag it." Prevents the reviewer from flagging removed content
+as a current concern — a common false positive pattern on PRs with many intermediate commits.
+
 ### pr-review: remove owner_handle tagging (2026-07-22, PR #61)
 
 Removed the `owner_handle` input from `auto-review.yml` and `OWNER_HANDLE` env var from
