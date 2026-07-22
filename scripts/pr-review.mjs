@@ -67,7 +67,8 @@ OUTPUT RULES — these are strict:
 - Your ENTIRE response must be ONLY a single JSON object. No preamble, no explanation, no markdown fences.
 - Shape: {"decision":"approve","body":"text"} or {"decision":"request_changes","body":"text"}
 - If everything is correct: decision="approve", body="LGTM"
-- If issues found: decision="request_changes", body lists each as: FILE · LINE · what is wrong · correct value · source
+- If issues found: decision="request_changes", body lists each issue on its own line as: FILE · what is wrong · correct value · source. Keep each item concise (1-2 sentences max). Report only genuine blocking issues — skip style preferences or unresolvable ambiguities.
+- JSON formatting: use \\n for line breaks in the body string. Never escape single quotes (write ' not \\'). Never include raw newlines inside a JSON string value.
 - Do not invent issues that are not in the diff
 - The diff shows only what changed in this PR — facts already present in the file from prior commits are NOT in the diff but are still present in the final file state. Do not flag "missing" content unless you can confirm it was removed in this diff.
 - prohibited_patterns in pr-checks.yml use grep -iE (case-insensitive) and are scoped to docs/ files only (doc_path_filter default). CLAUDE.md and root files are never scanned. Unqualified patterns for invented field names are intentional — any mention in docs/ is suspicious by design.`;
@@ -81,7 +82,7 @@ const res = await fetch('https://api.anthropic.com/v1/messages', {
   },
   body: JSON.stringify({
     model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
   }),
 });
