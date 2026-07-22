@@ -117,7 +117,7 @@ if (!result || !result.decision || !result.body) {
 // Normalize decision/body mismatch: if body signals LGTM but decision is request_changes, correct it.
 // Filter out lines the reviewer itself marked as non-blocking/withdrawn — these should not be in the body per prompt rules,
 // but the model sometimes includes them anyway. If nothing genuine remains, normalize to approve.
-const RETRACTION_SIGNALS = ['not a blocking issue', 'is not blocking', 'not blocking', 'no action needed', 'withdrawn', 'no issue here', 'lgtm', 'no blocking issues'];
+const RETRACTION_SIGNALS = ['not a blocking issue', 'is not blocking', 'not blocking', 'no action needed', 'withdrawn', 'withdraw', 'no issue here', 'no issue.', 'no issue from', 'no issue remains', 'this is resolved', 'which is correct', 'this is correct', 'is correct.', 'lgtm', 'no blocking issues', 'no blocking issue'];
 const bodyLines = result.body.split('\n');
 const genuineIssueLines = bodyLines.filter(line => {
   const l = line.trim().toLowerCase();
