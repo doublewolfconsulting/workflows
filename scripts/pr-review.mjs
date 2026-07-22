@@ -67,7 +67,7 @@ OUTPUT RULES — these are strict:
 - Your ENTIRE response must be ONLY a single JSON object. No preamble, no explanation, no markdown fences.
 - Shape: {"decision":"approve","body":"text"} or {"decision":"request_changes","body":"text"}
 - If everything is correct: decision="approve", body="LGTM". You MUST use decision="approve" when your conclusion is that there are no blocking issues. Using decision="request_changes" with a body that says LGTM or no blocking issues found is a violation of these rules.
-- If issues found: decision="request_changes", body lists ONLY genuine blocking issues, one per line as: FILE · what is wrong · correct value · source (1-2 sentences max). Do NOT include items you have resolved or withdrawn — if an item is not a blocking issue, omit it entirely. The body must contain at least one concrete unresolved issue to justify request_changes.
+- If issues found: decision="request_changes", body lists ONLY genuine blocking issues, one per line as: FILE · what is wrong · correct value · source (1-2 sentences max). CRITICAL: Do NOT include an item and then say "not a blocking issue" or "withdrawn" or "no action needed" — that is self-contradictory. If an item is not blocking, omit it from the body entirely before writing it. Never write an item you plan to retract. The body must contain only lines asserting a genuine unresolved problem.
 - JSON formatting: use \\n for line breaks in the body string. Never escape single quotes (write ' not \\'). Never include raw newlines inside a JSON string value.
 - Do not invent issues that are not in the diff
 - The diff shows only what changed in this PR. Lines prefixed with '+' are additions; lines prefixed with '-' are removals. Only flag issues found in '+' lines or unchanged context lines. NEVER flag content from '-' lines as a current problem — removed content is gone. Do not say "may not have been removed" or "confirm if still present" — if you cannot confirm something is in a '+' or context line, do not flag it.
@@ -115,16 +115,26 @@ if (!result || !result.decision || !result.body) {
 }
 
 // Normalize decision/body mismatch: if body signals LGTM but decision is request_changes, correct it.
+// Filter out lines the reviewer itself marked as non-blocking/withdrawn — these should not be in the body per prompt rules,
+// but the model sometimes includes them anyway. If nothing genuine remains, normalize to approve.
+const RETRACTION_SIGNALS = ['not a blocking issue', 'is not blocking', 'not blocking', 'no action needed', 'withdrawn', 'no issue here', 'lgtm', 'no blocking issues'];
+const bodyLines = result.body.split('\n');
+const genuineIssueLines = bodyLines.filter(line => {
+  const l = line.trim().toLowerCase();
+  if (!l) return false;
+  return l.includes(' · ') && !RETRACTION_SIGNALS.some(sig => l.includes(sig));
+});
 const bodyLower = result.body.trim().toLowerCase();
 const looksLikeApproval = (
   bodyLower.startsWith('lgtm') ||
   bodyLower.startsWith('no blocking issues') ||
   bodyLower.startsWith('no issues') ||
-  (bodyLower.includes('no blocking issue') && !bodyLower.match(/[·•].*[·•]/)) // body has no un-retracted issue line
+  genuineIssueLines.length === 0
 );
 if (result.decision === 'request_changes' && looksLikeApproval) {
-  console.warn('Decision/body mismatch detected — body signals approval but decision was request_changes. Normalizing to approve.');
+  console.warn('Decision/body mismatch — no genuine blocking issues found after filtering retractions. Normalizing to approve.');
   result.decision = 'approve';
+  result.body = 'LGTM';
 }
 
 console.log(`Decision: ${result.decision}`);
