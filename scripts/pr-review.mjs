@@ -70,6 +70,7 @@ OUTPUT RULES — these are strict:
 - If issues found: decision="request_changes", body lists each issue on its own line as: FILE · what is wrong · correct value · source. Keep each item concise (1-2 sentences max). Report only genuine blocking issues — skip style preferences or unresolvable ambiguities.
 - JSON formatting: use \\n for line breaks in the body string. Never escape single quotes (write ' not \\'). Never include raw newlines inside a JSON string value.
 - Do not invent issues that are not in the diff
+- The diff shows only what changed in this PR. Lines prefixed with '+' are additions; lines prefixed with '-' are removals. Only flag issues found in '+' lines or unchanged context lines. NEVER flag content from '-' lines as a current problem — removed content is gone. Do not say "may not have been removed" or "confirm if still present" — if you cannot confirm something is in a '+' or context line, do not flag it.
 - The diff shows only what changed in this PR — facts already present in the file from prior commits are NOT in the diff but are still present in the final file state. Do not flag "missing" content unless you can confirm it was removed in this diff.
 - prohibited_patterns in pr-checks.yml use grep -iE (case-insensitive) and are scoped to docs/ files only (doc_path_filter default). CLAUDE.md and root files are never scanned. Unqualified patterns for invented field names are intentional — any mention in docs/ is suspicious by design.`;
 
