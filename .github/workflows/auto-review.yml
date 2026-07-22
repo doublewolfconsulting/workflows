@@ -21,7 +21,6 @@ name: PR Review (Reusable)
 #         actions: read
 #       uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
 #       with:
-#         owner_handle: '@yourhandle'
 #         additional_context: |
 #           Repo-specific facts...
 #       secrets:
@@ -30,12 +29,6 @@ name: PR Review (Reusable)
 on:
   workflow_call:
     inputs:
-      owner_handle:
-        description: >
-          GitHub handle to tag only when an issue cannot be resolved without
-          human judgement (e.g. a business decision, ambiguous scope).
-        type: string
-        required: true
       additional_context:
         description: >
           Repo-specific context — ground-truth facts, coding standards,
@@ -83,6 +76,5 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_REF: ${{ github.base_ref }}
-          OWNER_HANDLE: ${{ inputs.owner_handle }}
           ADDITIONAL_CONTEXT: ${{ inputs.additional_context }}
         run: node _wf/scripts/pr-review.mjs

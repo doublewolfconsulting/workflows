@@ -22,6 +22,13 @@ None.
 
 ## Recently completed
 
+### pr-review: remove owner_handle tagging (2026-07-22, PR #61)
+
+Removed the `owner_handle` input from `auto-review.yml` and `OWNER_HANDLE` env var from
+`pr-review.mjs`. The prompt instruction that tagged an owner handle in review bodies for
+business/scope decisions is also gone. Callers no longer pass `owner_handle` — team reaches
+the project owner directly if clarification is needed.
+
 ### pr-checks: block merge on unchecked checkboxes (2026-07-22, PR #60)
 
 Added unchecked-checkbox detection to the `pr-body` job. Any `- [ ]` in the PR body
