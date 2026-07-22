@@ -117,12 +117,25 @@ if (!result || !result.decision || !result.body) {
 // Normalize decision/body mismatch: if body signals LGTM but decision is request_changes, correct it.
 // Filter out lines the reviewer itself marked as non-blocking/withdrawn — these should not be in the body per prompt rules,
 // but the model sometimes includes them anyway. If nothing genuine remains, normalize to approve.
-const RETRACTION_SIGNALS = ['not a blocking issue', 'not a factual error', 'not a blocking factual error', 'is not blocking', 'not blocking', 'no action needed', 'withdrawn', 'withdraw', 'no issue here', 'no issue.', 'no issue from', 'no issue remains', 'this is resolved', 'which is correct', 'this is correct', 'is correct.', 'is correct —', 'documentation clarity issue', 'clarity issue', 'minor and not blocking', 'must be verified', 'confirm the final', 'lgtm', 'no blocking issues', 'no blocking issue'];
+// A line is a genuine blocking issue if it:
+// 1. Contains the FILE · ISSUE format (at least one ·)
+// 2. Does NOT contain any retraction/resolution signal
+// We use broad substring checks to catch all variants of "no issue", "no blocking", etc.
+const RETRACTION_SIGNALS = [
+  'no issue', 'no blocking', 'no error', 'not blocking', 'not a blocking',
+  'not a factual', 'no factual', 'no action needed', 'withdraw', 'resolved',
+  'which is correct', 'this is correct', 'is correct', 'clarity issue',
+  'minor but', 'minor and not', 'must be verified', 'confirm the final',
+  'lgtm', 'internally consistent', 'acceptable', 'is acceptable'
+];
 const bodyLines = result.body.split('\n');
 const genuineIssueLines = bodyLines.filter(line => {
   const l = line.trim().toLowerCase();
   if (!l) return false;
-  return l.includes(' · ') && !RETRACTION_SIGNALS.some(sig => l.includes(sig));
+  // Must have file·issue format
+  if (!l.includes(' · ')) return false;
+  // Must not contain any retraction signal
+  return !RETRACTION_SIGNALS.some(sig => l.includes(sig));
 });
 const bodyLower = result.body.trim().toLowerCase();
 const looksLikeApproval = (
