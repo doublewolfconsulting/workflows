@@ -128,6 +128,16 @@ const RETRACTION_SIGNALS = [
   'minor but', 'minor and not', 'must be verified', 'confirm the final',
   'lgtm', 'internally consistent', 'acceptable', 'is acceptable'
 ];
+// Word-boundary match, not raw substring — a plain .includes('resolved') also matches
+// inside "unresolved" (and 'acceptable' inside "unacceptable"), which would misfire on
+// a line describing a genuinely UNresolved/unacceptable problem as if it were retracted.
+function hasRetractionSignal(text) {
+  const l = text.toLowerCase();
+  return RETRACTION_SIGNALS.some(sig => {
+    const escaped = sig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`).test(l);
+  });
+}
 const bodyLines = result.body.split('\n');
 const genuineIssueLines = bodyLines.filter(line => {
   const l = line.trim().toLowerCase();
@@ -135,7 +145,7 @@ const genuineIssueLines = bodyLines.filter(line => {
   // Must have file·issue format
   if (!l.includes(' · ')) return false;
   // Must not contain any retraction signal
-  return !RETRACTION_SIGNALS.some(sig => l.includes(sig));
+  return !hasRetractionSignal(l);
 });
 const bodyLower = result.body.trim().toLowerCase();
 const looksLikeApproval = (
@@ -153,12 +163,20 @@ if (result.decision === 'request_changes' && looksLikeApproval) {
 console.log(`Decision: ${result.decision}`);
 console.log(`Body:\n${result.body}`);
 
-// Add visual indicators: ✅ per line for approve, ❌ per line for each issue
+// Add visual indicators: ✅ per line for approve. For request_changes, a line only
+// gets ❌ if it's a genuine issue — lines the model included anyway despite the prompt
+// telling it not to (e.g. "X is correct, no issue") get ✅ instead, using the same
+// RETRACTION_SIGNALS check already used above to decide the overall decision. Without
+// this, every line in a request_changes body got ❌ regardless of what it said, making
+// self-described non-blocking commentary look like failures.
 let body = result.body;
 if (result.decision === 'approve') {
   body = body.split('\n').map(line => line.trim() ? `✅ ${line}` : line).join('\n');
 } else {
-  body = body.split('\n').map(line => line.trim() ? `❌ ${line}` : line).join('\n');
+  body = body.split('\n').map(line => {
+    if (!line.trim()) return line;
+    return `${hasRetractionSignal(line) ? '✅' : '❌'} ${line}`;
+  }).join('\n');
 }
 
 // Write body to a temp file to avoid shell quoting issues with special characters
