@@ -73,6 +73,7 @@ For each issue found (typo, wrong fact, stale reference, inconsistency), the bod
 
 - **Issues found** → REQUEST CHANGES with detailed findings. The status check **fails** (exit 1), blocking the merge. Tags `owner_handle` only for genuine business/scope ambiguity.
 - **Everything correct** → APPROVED, body "LGTM". Status check passes.
+- Each line in the posted review is prefixed ✅ or ❌ individually — even in a REQUEST CHANGES review, a line the model describes as resolved/not-blocking gets ✅, not a blanket ❌ across the whole body.
 - Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
 
 ---

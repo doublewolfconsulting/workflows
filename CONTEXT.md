@@ -22,6 +22,23 @@ None.
 
 ## Recently completed
 
+### pr-review: per-line ✅/❌ indicators instead of blanket-per-decision (2026-07-24)
+
+The visual indicators (PR #64) prefixed **every** line with ❌ whenever the overall
+decision was `request_changes` — even lines the model itself described as resolved/not
+blocking (which shouldn't be in the body per the prompt rules, but sometimes are anyway).
+That made self-described non-issues visually indistinguishable from genuine failures.
+Fixed by checking each line individually against `RETRACTION_SIGNALS` (the same list
+already used to decide the overall approve/request_changes normalization) before choosing
+its prefix — a retracted line now gets ✅ even inside an otherwise-failing review.
+
+Also fixed a related bug found while testing this: `RETRACTION_SIGNALS` matching used
+plain `.includes()`, so `'resolved'` matched inside "unresolved" and `'acceptable'`
+matched inside "unacceptable" — a line describing a genuinely *unresolved* problem could
+get silently filtered out as if it were retracted. Replaced with word-boundary regex
+matching (`hasRetractionSignal()`), used both for the per-line prefix and the existing
+aggregate decision-normalization check.
+
 ### pr-review: add ✅/❌ visual indicators to review body (2026-07-22, PR #64)
 
 Post-processes `result.body` in `pr-review.mjs` after Claude responds. Each line in an
