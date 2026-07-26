@@ -37,7 +37,6 @@ jobs:
       actions: read
     uses: doublewolfconsulting/workflows/.github/workflows/auto-review.yml@main
     with:
-      owner_handle: '@yourhandle'
       additional_context: |
         Any repo-specific facts Claude should verify changed files against.
         E.g. correct field names, S3 paths, schedule times, fund counts.
@@ -49,7 +48,6 @@ jobs:
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `owner_handle` | Yes | — | GitHub handle tagged only when an issue cannot be resolved without human judgement (business decision, ambiguous scope). |
 | `additional_context` | No | `''` | Repo-specific ground-truth facts, coding standards, architecture notes injected into the prompt. |
 
 ### Secrets
@@ -67,11 +65,18 @@ In the caller repo, go to **Settings → Actions → General → Workflow permis
 1. `gh pr diff` fetches the PR diff
 2. A single Claude Sonnet 4.6 API call receives the diff + `additional_context` as ground truth
 3. Claude responds with `{"decision": "approve"|"request_changes", "body": "..."}`
-4. `gh pr review` posts the result
+4. The script normalizes the response (see below), then `gh pr review` posts the result
 
-For each issue found (typo, wrong fact, stale reference, inconsistency), the body states precisely: file · line · what is wrong · correct value · which source confirms it. The author fixes it; no repo writes.
+For each issue found (typo, wrong fact, stale reference, inconsistency), the body states precisely: `FILE · what is wrong · correct value · source`. Each line is prefixed ✅ (approve) or ❌ (request changes) for visual clarity in the GitHub PR timeline.
 
-- **Issues found** → REQUEST CHANGES with detailed findings. The status check **fails** (exit 1), blocking the merge. Tags `owner_handle` only for genuine business/scope ambiguity.
+**Response normalization** — the script applies two layers after receiving Claude's response, before posting:
+
+- **Decision/body mismatch**: if Claude returns `request_changes` but the body starts with "LGTM" or "no blocking issues", the decision is corrected to `approve`.
+- **Retraction filtering**: body lines that contain the `FILE · ISSUE` format AND a retraction signal ("no blocking", "is correct", "withdrawn", "resolved", "acceptable", "internally consistent", etc.) are stripped. If no genuine blocking lines remain after filtering, the decision is normalized to `approve`.
+
+These handle the model occasionally including an item, analysing it as non-blocking, and still setting `request_changes`.
+
+- **Issues found** → REQUEST CHANGES with detailed findings. The status check **fails** (exit 1), blocking the merge.
 - **Everything correct** → APPROVED, body "LGTM". Status check passes.
 - Each line in the posted review is prefixed ✅ or ❌ individually — even in a REQUEST CHANGES review, a line the model describes as resolved/not-blocking gets ✅, not a blanket ❌ across the whole body.
 - Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
