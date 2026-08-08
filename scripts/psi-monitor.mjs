@@ -271,41 +271,50 @@ async function runSiteAudit() {
   return { consoleErrors, failedRequests, brokenLinks };
 }
 
-// --- Schema validation ------------------------------------------------------
+// --- Schema validation (plain HTTP fetch, no browser) -----------------------
+// JSON-LD schemas are static HTML injected at build time — no JS execution
+// needed. Using fetch() avoids Cloudflare bot detection entirely.
+
+function collectSchemaTypes(obj, types) {
+  if (!obj || typeof obj !== 'object') return;
+  if (Array.isArray(obj)) { obj.forEach(function(item) { collectSchemaTypes(item, types); }); return; }
+  const t = obj['@type'];
+  if (Array.isArray(t)) t.forEach(function(x) { types.add(x); });
+  else if (t) types.add(t);
+  Object.values(obj).forEach(function(val) { if (val && typeof val === 'object') collectSchemaTypes(val, types); });
+}
 
 async function validateSchema() {
   if (!SCHEMA_CONFIG || Object.keys(SCHEMA_CONFIG).length === 0) return null;
 
   console.log('Running schema validation...');
-  const browser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
-  const page = await newStealthPage(browser);
   const failures = [];
 
   for (const [url, expectedTypes] of Object.entries(SCHEMA_CONFIG)) {
     try {
-      await page.goto(url, { waitUntil: 'load', timeout: 30000 });
-      const foundTypes = await page.evaluate(function() {
-        // Recursively collect all JSON-LD type values from a JSON-LD object.
-        // Necessary because some types (e.g. AggregateRating) are nested inside
-        // parent nodes (e.g. Organization) rather than being top-level @graph nodes.
-        function collectTypes(obj, types) {
-          if (!obj || typeof obj !== 'object') return;
-          if (Array.isArray(obj)) { obj.forEach(function(item) { collectTypes(item, types); }); return; }
-          const t = obj['@type'];
-          if (Array.isArray(t)) t.forEach(function(x) { types.add(x); });
-          else if (t) types.add(t);
-          Object.values(obj).forEach(function(val) { if (val && typeof val === 'object') collectTypes(val, types); });
-        }
-        const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
-        const types = new Set();
-        for (const script of scripts) {
-          try { collectTypes(JSON.parse(script.textContent), types); } catch {}
-        }
-        return Array.from(types);
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
       });
-      const missing = expectedTypes.filter(function(t) { return !foundTypes.includes(t); });
+      if (!res.ok) {
+        failures.push({ url: url, error: 'HTTP ' + res.status });
+        console.log('  Schema ERROR ' + url + ': HTTP ' + res.status);
+        continue;
+      }
+      const html = await res.text();
+      const foundTypes = new Set();
+      const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+      let m;
+      while ((m = re.exec(html)) !== null) {
+        try { collectSchemaTypes(JSON.parse(m[1]), foundTypes); } catch {}
+      }
+      const foundArray = Array.from(foundTypes);
+      const missing = expectedTypes.filter(function(t) { return !foundArray.includes(t); });
       if (missing.length > 0) {
-        failures.push({ url: url, missing: missing, found: foundTypes });
+        failures.push({ url: url, missing: missing, found: foundArray });
         console.log('  Schema FAIL ' + url + ': missing ' + missing.join(', '));
       } else {
         console.log('  Schema PASS ' + url);
@@ -316,7 +325,6 @@ async function validateSchema() {
     }
   }
 
-  await browser.close();
   console.log('Schema validation: ' + failures.length + ' failure(s)');
   return failures.length > 0 ? failures : null;
 }
