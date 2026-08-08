@@ -254,7 +254,7 @@ async function runSiteAudit() {
     try {
       const status = await page.evaluate(async function(url) {
         try {
-          var r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+          var r = await fetch(url, { method: 'GET', redirect: 'follow' });
           return r.status;
         } catch { return 0; }
       }, link);
