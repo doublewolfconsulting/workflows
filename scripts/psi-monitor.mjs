@@ -244,25 +244,30 @@ async function runSiteAudit() {
       .filter(function(href, i, arr) { return arr.indexOf(href) === i; });
   }, SITE_URL);
 
-  // Check up to 20 internal links for 4xx/5xx.
-  // Use page.evaluate(fetch) so the request originates from the browser context
-  // (carries TLS fingerprint, cookies, and all browser headers set by the stealth
-  // context). page.request.get() is a programmatic request that lacks these signals
-  // and is blocked by Cloudflare Bot Fight Mode even with cookies set.
+  await browser.close();
+
+  // Check up to 20 internal links for 4xx/5xx using fresh browser navigations.
+  // page.evaluate(fetch()) is blocked by Cloudflare Bot Fight Mode with 403 because
+  // JS fetch requests carry Sec-Fetch-Mode: cors/same-origin instead of navigate —
+  // these 403s then appear as false console errors and failed requests in audit results.
+  // A fresh browser per link with page.goto() carries the correct navigation fingerprint
+  // (same approach used in schema validation). waitUntil:'commit' returns as soon as the
+  // HTTP response headers arrive so link checks don't wait for full page render.
   const brokenLinks = [];
   for (const link of links.slice(0, 20)) {
+    const linkBrowser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
     try {
-      const status = await page.evaluate(async function(url) {
-        try {
-          var r = await fetch(url, { method: 'GET', redirect: 'follow' });
-          return r.status;
-        } catch { return 0; }
-      }, link);
+      const linkPage = await newStealthPage(linkBrowser);
+      let status = 0;
+      try {
+        const response = await linkPage.goto(link, { waitUntil: 'commit', timeout: 15000 });
+        status = response ? response.status() : 0;
+      } catch {}
       if (status >= 400) brokenLinks.push(status + ' ' + link);
-    } catch {}
+    } finally {
+      await linkBrowser.close();
+    }
   }
-
-  await browser.close();
 
   console.log(
     'Site audit: ' + consoleErrors.length + ' console error(s), ' +
