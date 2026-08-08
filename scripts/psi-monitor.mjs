@@ -192,12 +192,28 @@ function extractLighthouseDetail(data) {
   return lines.join('\n');
 }
 
+// --- Playwright helpers -----------------------------------------------------
+
+// Creates a browser context that passes basic bot-detection checks.
+// Cloudflare Bot Fight Mode blocks headless Chromium when navigator.webdriver
+// is true (the default). Using a real user-agent and removing the webdriver
+// property makes the request indistinguishable from a normal browser visit.
+async function newStealthPage(browser) {
+  const context = await browser.newContext({
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  });
+  await context.addInitScript(function() {
+    Object.defineProperty(navigator, 'webdriver', { get: function() { return undefined; } });
+  });
+  return context.newPage();
+}
+
 // --- Playwright site audit --------------------------------------------------
 
 async function runSiteAudit() {
   console.log('Running Playwright site audit...');
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
+  const browser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
+  const page = await newStealthPage(browser);
 
   const consoleErrors = [];
   const failedRequests = [];
@@ -253,8 +269,8 @@ async function validateSchema() {
   if (!SCHEMA_CONFIG || Object.keys(SCHEMA_CONFIG).length === 0) return null;
 
   console.log('Running schema validation...');
-  const browser = await chromium.launch();
-  const page = await browser.newPage();
+  const browser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
+  const page = await newStealthPage(browser);
   const failures = [];
 
   for (const [url, expectedTypes] of Object.entries(SCHEMA_CONFIG)) {
