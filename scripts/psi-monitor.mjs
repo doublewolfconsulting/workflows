@@ -245,10 +245,18 @@ async function runSiteAudit() {
   }, SITE_URL);
 
   // Check up to 20 internal links for 4xx/5xx
+  // Use browser-like Accept headers so Cloudflare Bot Fight Mode doesn't block the requests.
   const brokenLinks = [];
   for (const link of links.slice(0, 20)) {
     try {
-      const res = await page.request.get(link, { timeout: 10000 });
+      const res = await page.request.get(link, {
+        timeout: 10000,
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+      });
       if (res.status() >= 400) brokenLinks.push(res.status() + ' ' + link);
     } catch {}
   }
@@ -663,6 +671,15 @@ async function main() {
 
   const psiPass = mobile.score >= THRESHOLDS.mobile && desktop.score >= THRESHOLDS.desktop;
 
+  // Schema validation runs first — before the site audit's link checker makes raw
+  // HTTP requests that can trigger Cloudflare bot mitigation on the runner IP.
+  let schemaFailures = null;
+  try {
+    schemaFailures = await validateSchema();
+  } catch (err) {
+    console.error('Schema validation error (non-fatal): ' + err.message);
+  }
+
   // Playwright site audit (always runs)
   let siteAudit = null;
   try {
@@ -676,13 +693,6 @@ async function main() {
     siteAudit.failedRequests.length === 0 &&
     siteAudit.brokenLinks.length === 0
   );
-
-  let schemaFailures = null;
-  try {
-    schemaFailures = await validateSchema();
-  } catch (err) {
-    console.error('Schema validation error (non-fatal): ' + err.message);
-  }
 
   const schemaPass = !schemaFailures || schemaFailures.length === 0;
   const allPass = psiPass && auditPass && schemaPass;
