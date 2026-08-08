@@ -213,7 +213,7 @@ async function runSiteAudit() {
   });
 
   try {
-    await page.goto(SITE_URL, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(SITE_URL, { waitUntil: 'load', timeout: 30000 });
   } catch (err) {
     await browser.close();
     console.error('Playwright navigation failed: ' + err.message);
@@ -259,7 +259,7 @@ async function validateSchema() {
 
   for (const [url, expectedTypes] of Object.entries(SCHEMA_CONFIG)) {
     try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto(url, { waitUntil: 'load', timeout: 30000 });
       const foundTypes = await page.evaluate(function() {
         // Recursively collect all JSON-LD type values from a JSON-LD object.
         // Necessary because some types (e.g. AggregateRating) are nested inside
