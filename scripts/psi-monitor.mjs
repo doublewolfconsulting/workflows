@@ -244,20 +244,21 @@ async function runSiteAudit() {
       .filter(function(href, i, arr) { return arr.indexOf(href) === i; });
   }, SITE_URL);
 
-  // Check up to 20 internal links for 4xx/5xx
-  // Use browser-like Accept headers so Cloudflare Bot Fight Mode doesn't block the requests.
+  // Check up to 20 internal links for 4xx/5xx.
+  // Use page.evaluate(fetch) so the request originates from the browser context
+  // (carries TLS fingerprint, cookies, and all browser headers set by the stealth
+  // context). page.request.get() is a programmatic request that lacks these signals
+  // and is blocked by Cloudflare Bot Fight Mode even with cookies set.
   const brokenLinks = [];
   for (const link of links.slice(0, 20)) {
     try {
-      const res = await page.request.get(link, {
-        timeout: 10000,
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-        },
-      });
-      if (res.status() >= 400) brokenLinks.push(res.status() + ' ' + link);
+      const status = await page.evaluate(async function(url) {
+        try {
+          var r = await fetch(url, { method: 'HEAD', redirect: 'follow' });
+          return r.status;
+        } catch { return 0; }
+      }, link);
+      if (status >= 400) brokenLinks.push(status + ' ' + link);
     } catch {}
   }
 
@@ -271,9 +272,12 @@ async function runSiteAudit() {
   return { consoleErrors, failedRequests, brokenLinks };
 }
 
-// --- Schema validation (plain HTTP fetch, no browser) -----------------------
-// JSON-LD schemas are static HTML injected at build time — no JS execution
-// needed. Using fetch() avoids Cloudflare bot detection entirely.
+// --- Schema validation ------------------------------------------------------
+// Uses a fresh Playwright browser context per URL. Reusing a single page across
+// multiple navigations triggers Cloudflare's bot detection (no user interaction
+// signals between rapid cross-page navigations). A fresh context per URL looks
+// like independent browser visits and passes the challenge every time.
+// page.content() retrieves the HTML; JSON-LD is parsed in Node.js.
 
 function collectSchemaTypes(obj, types) {
   if (!obj || typeof obj !== 'object') return;
@@ -291,20 +295,11 @@ async function validateSchema() {
   const failures = [];
 
   for (const [url, expectedTypes] of Object.entries(SCHEMA_CONFIG)) {
+    const browser = await chromium.launch({ args: ['--disable-blink-features=AutomationControlled'] });
     try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-        },
-      });
-      if (!res.ok) {
-        failures.push({ url: url, error: 'HTTP ' + res.status });
-        console.log('  Schema ERROR ' + url + ': HTTP ' + res.status);
-        continue;
-      }
-      const html = await res.text();
+      const page = await newStealthPage(browser);
+      await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+      const html = await page.content();
       const foundTypes = new Set();
       const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
       let m;
@@ -322,6 +317,8 @@ async function validateSchema() {
     } catch (err) {
       failures.push({ url: url, error: err.message });
       console.log('  Schema ERROR ' + url + ': ' + err.message);
+    } finally {
+      await browser.close();
     }
   }
 
