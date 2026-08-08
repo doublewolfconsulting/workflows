@@ -261,11 +261,13 @@ Fetches Google PageSpeed Insights for both mobile and desktop. If either score f
 
 #### 2. Playwright site audit
 
-Launches a headless Chromium browser against the live site and runs a Playwright script that checks rendering, navigation, and basic accessibility. Failures indicate something broke in production that PSI alone would not catch.
+Launches a headless Chromium browser against the live site and captures console errors, failed network requests (4xx/5xx), and broken internal links. Failures indicate something broke in production that PSI alone would not catch.
+
+**Cloudflare Bot Fight Mode compatibility**: the browser runs in stealth mode (`--disable-blink-features=AutomationControlled`, custom user-agent, `navigator.webdriver` removed via `addInitScript`). Internal link checking uses a fresh `chromium.launch()` per link with `page.goto(waitUntil:'commit')` — this carries the correct `Sec-Fetch-Mode: navigate` headers. JS-level `fetch()` from `page.evaluate()` would receive 403s from Cloudflare because those requests use `Sec-Fetch-Mode: cors`, generating false positives.
 
 #### 3. Schema validation
 
-If `schema_config` is provided, navigates to each URL via Playwright and extracts all JSON-LD type values (including types nested inside parent objects, e.g. `AggregateRating` inside `Organization`). Fails if any expected type is missing.
+If `schema_config` is provided, validates JSON-LD schema on each URL. Uses a fresh `chromium.launch()` per URL in stealth mode — reusing the same page or context across multiple rapid navigations triggers Cloudflare bot detection. HTML is retrieved via `page.content()` and parsed in Node.js with a regex against `<script type="application/ld+json">` blocks; nested types are collected via full recursive traversal. Fails if any expected type is missing.
 
 #### On failure
 
