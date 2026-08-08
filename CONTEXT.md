@@ -39,6 +39,33 @@ get silently filtered out as if it were retracted. Replaced with word-boundary r
 matching (`hasRetractionSignal()`), used both for the per-line prefix and the existing
 aggregate decision-normalization check.
 
+### pr-review: broad retraction signal detection (2026-07-22, PRs #65–69)
+
+Five iterations to harden the retraction filter and prompt after observing new false-positive
+patterns in production (boreas-website PRs #75 and #95):
+
+**PR #65** — Prompt: "Withdrawn items must be omitted entirely. Never write an item you plan to
+retract." Added after the model included items and then wrote "Withdrawing." in the same body.
+
+**PR #66** — Script: retraction filter introduced. Body lines that match `FILE · ISSUE` format
+AND contain a retraction signal are stripped before deciding. If nothing genuine remains after
+filtering, normalize to `approve`. Initial signal list: "no issue", "no blocking", "withdraw",
+"which is correct", "this is correct", "is correct", "resolved", "lgtm", "no action needed".
+
+**PR #67** — Expanded retraction signals after observing "No blocking error." and "No issue."
+variants not being caught. Added: "no error", "not blocking", "not a blocking", "not a factual",
+"no factual".
+
+**PR #68** — Expanded further after observing "Clarity issue only, not blocking." and "Must be
+verified but not a blocker." Added: "clarity issue", "minor but", "minor and not",
+"must be verified", "confirm the final".
+
+**PR #69** — Switched to broad substring matching for all signals. Added: "internally
+consistent", "acceptable", "is acceptable". Removed overly-specific exact-match variants in
+favour of substrings that catch all observed phrasings without needing per-phrase entries.
+
+All five PRs merged to main; boreas-website pulls the latest via `@main`.
+
 ### pr-review: add ✅/❌ visual indicators to review body (2026-07-22, PR #64)
 
 Post-processes `result.body` in `pr-review.mjs` after Claude responds. Each line in an
