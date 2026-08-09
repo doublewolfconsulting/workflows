@@ -335,13 +335,13 @@ After every run — pass or fail — a job summary is written to the Actions tab
 
 #### 3. Playwright site audit
 
-Launches a headless Chromium browser against `site_url` (homepage) and captures console errors, failed network requests (4xx/5xx), and broken internal links.
+Launches a headless Chromium browser against `site_url` (homepage) and captures console errors, failed network requests (4xx/5xx), and broken internal links. Failures indicate something broke in production that PSI alone would not catch.
 
-**Cloudflare Bot Fight Mode compatibility**: stealth mode (`--disable-blink-features=AutomationControlled`, custom user-agent, `navigator.webdriver` removed). Link checking uses a fresh `chromium.launch()` per link with `page.goto(waitUntil:'commit')` for correct `Sec-Fetch-Mode: navigate` headers — JS-level `fetch()` from `page.evaluate()` gets 403s from Cloudflare.
+**Cloudflare Bot Fight Mode compatibility**: the browser runs in stealth mode (`--disable-blink-features=AutomationControlled`, custom user-agent, `navigator.webdriver` removed via `addInitScript`). Internal link checking uses a fresh `chromium.launch()` per link with `page.goto(waitUntil:'commit')` — this carries the correct `Sec-Fetch-Mode: navigate` headers. JS-level `fetch()` from `page.evaluate()` would receive 403s from Cloudflare because those requests use `Sec-Fetch-Mode: cors`, generating false positives.
 
 #### 4. Schema validation
 
-If `schema_config` is provided, validates JSON-LD on each configured URL using a fresh `chromium.launch()` per URL. HTML is retrieved via `page.content()` and scanned for `<script type="application/ld+json">` blocks; types are collected via full recursive traversal.
+If `schema_config` is provided, validates JSON-LD schema on each configured URL using a fresh `chromium.launch()` per URL in stealth mode — reusing the same page or context across multiple rapid navigations triggers Cloudflare bot detection. HTML is retrieved via `page.content()` and scanned for `<script type="application/ld+json">` blocks; types are collected via full recursive traversal. Fails if any expected type is missing.
 
 #### On failure
 
