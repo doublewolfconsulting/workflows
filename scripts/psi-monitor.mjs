@@ -113,6 +113,7 @@ async function fetchPSI(pageUrl, strategy, attempt) {
   if (!attempt) attempt = 1;
   const url = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed' +
     '?url=' + encodeURIComponent(pageUrl) + '&strategy=' + strategy +
+    '&category=performance&category=accessibility&category=best-practices&category=seo' +
     (GOOGLE_PSI_API_KEY ? '&key=' + GOOGLE_PSI_API_KEY : '');
   const res = await fetch(url);
   // Retry on 429 (rate limit) and 400/5xx (transient API failures).
