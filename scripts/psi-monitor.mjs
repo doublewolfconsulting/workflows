@@ -286,6 +286,38 @@ function extractLighthouseDetail(data) {
     });
   }
 
+  // Accessibility failures — show failing audits with element snippets for diagnosis
+  const accessibilityIds = [
+    'color-contrast',
+    'image-alt',
+    'label',
+    'heading-order',
+    'link-name',
+    'button-name',
+    'aria-hidden-body',
+    'duplicate-id-active',
+  ];
+  const a11yLines = [];
+  for (const id of accessibilityIds) {
+    const a = audits[id];
+    if (a && a.score !== null && a.score < 1) {
+      a11yLines.push('  ' + (a.title || id) + ':');
+      if (a.details && a.details.items) {
+        a.details.items.slice(0, 5).forEach(function(item) {
+          const snippet = (item.node && item.node.snippet) || '';
+          const ratio = (item.contrastRatio != null)
+            ? ' (ratio: ' + item.contrastRatio.toFixed(2) + ':1, need ' + item.thresholdRatio + ':1)'
+            : '';
+          if (snippet) a11yLines.push('    - ' + snippet.slice(0, 120) + ratio);
+        });
+      }
+    }
+  }
+  if (a11yLines.length > 0) {
+    lines.push('Accessibility failures:');
+    a11yLines.forEach(function(l) { lines.push(l); });
+  }
+
   return lines.join('\n');
 }
 
