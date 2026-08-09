@@ -24,6 +24,51 @@ on:
         required: false
         type: string
         default: ''
+      pages:
+        description: 'JSON array of page URLs to audit. Defaults to [site_url] if omitted.'
+        required: false
+        type: string
+        default: ''
+      performance_mobile_threshold:
+        description: 'Performance threshold for mobile (0 = fall back to mobile_threshold)'
+        required: false
+        type: number
+        default: 0
+      performance_desktop_threshold:
+        description: 'Performance threshold for desktop (0 = fall back to desktop_threshold)'
+        required: false
+        type: number
+        default: 0
+      accessibility_mobile_threshold:
+        description: 'Accessibility threshold for mobile (0 = skip check)'
+        required: false
+        type: number
+        default: 0
+      accessibility_desktop_threshold:
+        description: 'Accessibility threshold for desktop (0 = skip check)'
+        required: false
+        type: number
+        default: 0
+      best_practices_mobile_threshold:
+        description: 'Best practices threshold for mobile (0 = skip check)'
+        required: false
+        type: number
+        default: 0
+      best_practices_desktop_threshold:
+        description: 'Best practices threshold for desktop (0 = skip check)'
+        required: false
+        type: number
+        default: 0
+      seo_mobile_threshold:
+        description: 'SEO threshold for mobile (0 = skip check)'
+        required: false
+        type: number
+        default: 0
+      seo_desktop_threshold:
+        description: 'SEO threshold for desktop (0 = skip check)'
+        required: false
+        type: number
+        default: 0
     secrets:
       ANTHROPIC_API_KEY:
         required: true
@@ -89,3 +134,12 @@ jobs:
           DESKTOP_THRESHOLD: ${{ inputs.desktop_threshold }}
           CONTEXT_FILES: ${{ inputs.context_files }}
           SCHEMA_CONFIG: ${{ inputs.schema_config }}
+          PAGES: ${{ inputs.pages }}
+          PERFORMANCE_MOBILE_THRESHOLD: ${{ inputs.performance_mobile_threshold }}
+          PERFORMANCE_DESKTOP_THRESHOLD: ${{ inputs.performance_desktop_threshold }}
+          ACCESSIBILITY_MOBILE_THRESHOLD: ${{ inputs.accessibility_mobile_threshold }}
+          ACCESSIBILITY_DESKTOP_THRESHOLD: ${{ inputs.accessibility_desktop_threshold }}
+          BEST_PRACTICES_MOBILE_THRESHOLD: ${{ inputs.best_practices_mobile_threshold }}
+          BEST_PRACTICES_DESKTOP_THRESHOLD: ${{ inputs.best_practices_desktop_threshold }}
+          SEO_MOBILE_THRESHOLD: ${{ inputs.seo_mobile_threshold }}
+          SEO_DESKTOP_THRESHOLD: ${{ inputs.seo_desktop_threshold }}

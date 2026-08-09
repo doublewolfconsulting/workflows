@@ -210,9 +210,11 @@ that's what makes scanning the PR body here safe and useful instead of adversari
 
 **File:** `.github/workflows/psi-monitor.yml`
 
-Runs on a schedule: checks [PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores, runs a Playwright site audit, and validates JSON-LD schema if `schema_config` is provided. On any failure, uses Claude to diagnose the root cause and opens a GitHub issue. If confidence is high, also opens a draft PR with a proposed fix.
+Runs on a schedule: checks [PageSpeed Insights](https://developers.google.com/speed/docs/insights/v5/about) scores (performance, accessibility, best-practices, SEO) across all configured pages, runs a Playwright site audit, and validates JSON-LD schema if `schema_config` is provided. On any failure, uses Claude to diagnose the root cause and opens a GitHub issue. Every run (pass or fail) writes a job summary to the Actions tab with full Lighthouse findings. If confidence is high, also opens a draft PR with a proposed fix.
 
 ### Usage
+
+The recommended pattern derives both `schema_config` and `pages` from `site.config.js` in a pre-job, then passes them to the monitor:
 
 ```yaml
 # .github/workflows/psi-monitor.yml
@@ -222,14 +224,71 @@ on:
   workflow_dispatch:
 
 jobs:
+  generate-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      schema_config: ${{ steps.gen.outputs.schema_config }}
+      pages: ${{ steps.gen.outputs.pages }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Derive schema_config and pages from site.config.js
+        id: gen
+        run: |
+          CONFIG=$(node -e "
+            const cfg = require('./site.config.js');
+            const out = {};
+            for (const [key, page] of Object.entries(cfg.pages)) {
+              if (page.schemas) {
+                const url = key === 'home' ? cfg.site.baseUrl + '/' : cfg.site.baseUrl + page.url;
+                out[url] = page.schemas;
+              }
+            }
+            console.log(JSON.stringify(out));
+          ")
+          PAGES=$(node -e "
+            const cfg = require('./site.config.js');
+            const pages = Object.entries(cfg.pages).map(([key, p]) =>
+              key === 'home' ? cfg.site.baseUrl + '/' : cfg.site.baseUrl + p.url
+            );
+            console.log(JSON.stringify(pages));
+          ")
+          echo "schema_config=$CONFIG" >> $GITHUB_OUTPUT
+          echo "pages=$PAGES" >> $GITHUB_OUTPUT
+
+  monitor:
+    needs: generate-config
+    uses: doublewolfconsulting/workflows/.github/workflows/psi-monitor.yml@main
+    with:
+      site_url: 'https://example.com'
+      pages: ${{ needs.generate-config.outputs.pages }}
+      performance_mobile_threshold: 95
+      performance_desktop_threshold: 95
+      accessibility_mobile_threshold: 95
+      accessibility_desktop_threshold: 95
+      best_practices_mobile_threshold: 95
+      best_practices_desktop_threshold: 95
+      seo_mobile_threshold: 95
+      seo_desktop_threshold: 95
+      context_files: 'CLAUDE.md src/index.html'
+      schema_config: ${{ needs.generate-config.outputs.schema_config }}
+    secrets: inherit
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+```
+
+If you only need the homepage audited and don't need per-category thresholds, the minimal backwards-compatible form still works:
+
+```yaml
+jobs:
   monitor:
     uses: doublewolfconsulting/workflows/.github/workflows/psi-monitor.yml@main
     with:
       site_url: 'https://example.com'
       mobile_threshold: 90
       desktop_threshold: 90
-      context_files: 'CLAUDE.md src/index.html'  # space-separated, repo-relative
-      schema_config: '{"https://example.com/":["Organization","WebSite","WebPage"]}'  # optional
     secrets: inherit
 ```
 
@@ -237,11 +296,20 @@ jobs:
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `site_url` | Yes | (none) | The URL to audit (e.g. `https://example.com`) |
-| `mobile_threshold` | No | `90` | Minimum mobile PSI score |
-| `desktop_threshold` | No | `90` | Minimum desktop PSI score |
+| `site_url` | Yes | (none) | Primary site URL (used for Playwright audit and as fallback when `pages` is omitted) |
+| `pages` | No | `[site_url]` | JSON array of page URLs to audit. Omit for homepage-only. |
+| `mobile_threshold` | No | `90` | Legacy: minimum mobile performance score. Used when `performance_mobile_threshold` is 0. |
+| `desktop_threshold` | No | `90` | Legacy: minimum desktop performance score. Used when `performance_desktop_threshold` is 0. |
+| `performance_mobile_threshold` | No | `0` | Performance threshold for mobile. 0 = fall back to `mobile_threshold`. |
+| `performance_desktop_threshold` | No | `0` | Performance threshold for desktop. 0 = fall back to `desktop_threshold`. |
+| `accessibility_mobile_threshold` | No | `0` | Accessibility threshold for mobile. 0 = skip check. |
+| `accessibility_desktop_threshold` | No | `0` | Accessibility threshold for desktop. 0 = skip check. |
+| `best_practices_mobile_threshold` | No | `0` | Best practices threshold for mobile. 0 = skip check. |
+| `best_practices_desktop_threshold` | No | `0` | Best practices threshold for desktop. 0 = skip check. |
+| `seo_mobile_threshold` | No | `0` | SEO threshold for mobile. 0 = skip check. |
+| `seo_desktop_threshold` | No | `0` | SEO threshold for desktop. 0 = skip check. |
 | `context_files` | No | `CLAUDE.md` | Space-separated repo-relative paths to include in Claude's context when diagnosing failures |
-| `schema_config` | No | (none) | JSON object mapping URLs to arrays of expected JSON-LD type values. Fails the run if any expected type is missing from the page. Nested types (e.g. `AggregateRating` inside `Organization`) are detected via full recursive traversal. Example: `{"https://example.com/":["Organization","WebSite"]}` |
+| `schema_config` | No | (none) | JSON object mapping URLs to arrays of expected JSON-LD type values. Example: `{"https://example.com/":["Organization","WebSite"]}` |
 
 ### Setup
 
@@ -249,38 +317,44 @@ jobs:
 
 2. **Anthropic API key**: get one from [console.anthropic.com](https://console.anthropic.com/). Add it as a repository secret named `ANTHROPIC_API_KEY`.
 
-3. **`GITHUB_TOKEN`**: provided automatically by Actions. The workflow needs `contents: write`, `issues: write`, and `pull-requests: write` permissions, granted via the `permissions:` block in the shared workflow.
+3. **`GITHUB_TOKEN`**: provided automatically by Actions. The caller must include `permissions: contents: write, issues: write, pull-requests: write`.
 
 ### How it works
 
-Three checks run on every execution. All three must pass or a `site-health` issue is opened.
+Four checks run on every execution. All must pass or a `site-health` issue is opened.
 
-#### 1. PSI scores
+#### 1. PSI scores (multi-page, all categories)
 
-Fetches Google PageSpeed Insights for both mobile and desktop. If either score falls below the configured threshold, the run retries once after 5 minutes before raising an alarm. This avoids false positives from transient measurement noise.
+Fetches Google PageSpeed Insights for every URL in `pages`, for both mobile and desktop (2 API calls per page). Extracts all four category scores — performance, accessibility, best-practices, SEO — from each response (no extra calls; PSI already returns all four). Checks each score against its configured threshold; a threshold of `0` skips that category.
 
-#### 2. Playwright site audit
+If any page falls below a threshold, all failing pages are retried together after a single 2-minute wait (not per-page — sequential waits would compound with many pages). Two consecutive failures means the regression is real.
 
-Launches a headless Chromium browser against the live site and captures console errors, failed network requests (4xx/5xx), and broken internal links. Failures indicate something broke in production that PSI alone would not catch.
+#### 2. GitHub Actions job summary
+
+After every run — pass or fail — a job summary is written to the Actions tab ("Summary" panel on the run page). It shows the per-page scores table and full Lighthouse findings for every page with ✅/⚠️/❌ icons, including passing items. This surfaces optimisation opportunities (unused JS, image savings, long cache TTL, etc.) even when all scores are green.
+
+#### 3. Playwright site audit
+
+Launches a headless Chromium browser against `site_url` (homepage) and captures console errors, failed network requests (4xx/5xx), and broken internal links. Failures indicate something broke in production that PSI alone would not catch.
 
 **Cloudflare Bot Fight Mode compatibility**: the browser runs in stealth mode (`--disable-blink-features=AutomationControlled`, custom user-agent, `navigator.webdriver` removed via `addInitScript`). Internal link checking uses a fresh `chromium.launch()` per link with `page.goto(waitUntil:'commit')` — this carries the correct `Sec-Fetch-Mode: navigate` headers. JS-level `fetch()` from `page.evaluate()` would receive 403s from Cloudflare because those requests use `Sec-Fetch-Mode: cors`, generating false positives.
 
-#### 3. Schema validation
+#### 4. Schema validation
 
-If `schema_config` is provided, validates JSON-LD schema on each URL. Uses a fresh `chromium.launch()` per URL in stealth mode — reusing the same page or context across multiple rapid navigations triggers Cloudflare bot detection. HTML is retrieved via `page.content()` and parsed in Node.js with a regex against `<script type="application/ld+json">` blocks; nested types are collected via full recursive traversal. Fails if any expected type is missing.
+If `schema_config` is provided, validates JSON-LD schema on each configured URL using a fresh `chromium.launch()` per URL in stealth mode — reusing the same page or context across multiple rapid navigations triggers Cloudflare bot detection. HTML is retrieved via `page.content()` and scanned for `<script type="application/ld+json">` blocks; types are collected via full recursive traversal. Fails if any expected type is missing.
 
 #### On failure
 
-The failing checks are passed to `claude-sonnet-4-6` alongside the files listed in `context_files`. Claude diagnoses the root cause and proposes a fix. The workflow then:
+Only failing pages' Lighthouse detail is sent to `claude-sonnet-4-6` (not all pages), keeping token cost proportional to failures. Claude diagnoses the root cause and proposes a fix. The workflow then:
 
-- Opens a GitHub issue labelled `site-health` with the PSI scores, Playwright output, schema failures, and Claude's diagnosis
-- If Claude's confidence is high and the fix matches a known pattern, opens a draft PR with the proposed change
+- Opens a GitHub issue labelled `site-health` with a per-page scores table (columns only for checked categories), Playwright output, schema failures, and Claude's diagnosis
+- If Claude's confidence is high, opens a draft PR with the proposed change
 - On subsequent failures while the issue is open, appends a comment rather than opening a new issue
 - Auto-closes the issue when all checks pass again
 
 #### Internals
 
-The workflow checks out both the caller's repo (for context files and git operations) and this workflows repo (for the script and its dependencies) into a `_wf/` subfolder. No script or `package.json` is needed in the calling repo. The Playwright Chromium binary is cached between runs (keyed on `_wf/package-lock.json`) and only downloaded and extracted on a cache miss.
+The workflow checks out both the caller's repo and this workflows repo (`_wf/` subfolder). No script or `package.json` is needed in the calling repo. The Playwright Chromium binary is cached between runs (keyed on `_wf/package-lock.json`).
 
 ---
 

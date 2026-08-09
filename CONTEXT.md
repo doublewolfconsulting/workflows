@@ -22,6 +22,27 @@ None.
 
 ## Recently completed
 
+### psi-monitor: multi-page, all categories, per-category thresholds, job summary (2026-08-09, PR pending)
+
+- **Multi-page**: new `pages` input (JSON array); callers derive it from `cfg.pages` in a
+  `generate-config` pre-job alongside `schema_config`. Adding a page to `cfg.pages` automatically
+  adds it to the PSI audit. Backwards compatible — omitting `pages` defaults to `[site_url]`.
+- **All 4 categories**: `extractMetrics()` now returns performance, accessibility, best-practices,
+  and SEO from every PSI response. No extra API calls — all four are already in every response.
+- **Per-category thresholds**: 8 new inputs (mobile + desktop per category). `0` = skip.
+  Performance falls back to legacy `mobile_threshold` / `desktop_threshold` when not set.
+- **Batch flakiness retry**: all failing pages collected first, single 2-min wait, then only
+  failing pages retried. Previous single-page sequential retry would compound badly with N pages.
+- **Job summary**: `writeSummary()` appends to `$GITHUB_STEP_SUMMARY` after every run
+  unconditionally. Shows per-page scores table + full Lighthouse findings with ✅/⚠️/❌ icons
+  (all audit items, not just score < 0.9) so optimisation opportunities are visible on passing
+  runs. `extractAllFindings()` is separate from `extractLighthouseDetail()` which retains the
+  score < 0.9 filter for Claude prompts.
+- **Issue body**: per-page × per-category table format; columns only shown for checked categories.
+- **Claude prompt**: LH detail sent only for failing pages — token cost proportional to failures.
+
+## Recently completed
+
 ### pr-review: per-line ✅/❌ indicators instead of blanket-per-decision (2026-07-24)
 
 The visual indicators (PR #64) prefixed **every** line with ❌ whenever the overall
