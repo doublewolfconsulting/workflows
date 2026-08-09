@@ -81,6 +81,15 @@ These handle the model occasionally including an item, analysing it as non-block
 - Each line in the posted review is prefixed ✅ or ❌ individually — even in a REQUEST CHANGES review, a line the model describes as resolved/not-blocking gets ✅, not a blanket ❌ across the whole body.
 - Draft PRs are skipped. Concurrency cancel ensures no stale reviews on multi-push PRs.
 
+### Known limitations
+
+- **Diff-only context**: the reviewer sees only changed lines, not the full codebase. It cannot detect cross-file issues — a function deleted in this PR but still called in another unchanged file, a constant redefined elsewhere, or a schema change that breaks an unrelated query. Complement with type checking, linting, and tests.
+- **No code execution**: cannot run builds, tests, or scripts. "This looks correct" is static analysis, not verified behaviour. Automated test suites catch what the reviewer cannot.
+- **`additional_context` is the key lever**: without project-specific ground truth (correct field names, API shapes, config counts, canonical values), the reviewer operates on general heuristics only. The more concrete and specific the context, the higher the signal-to-noise.
+- **Large PRs degrade quality**: very large diffs approach context limits and reduce review depth. Smaller, focused PRs get more reliable feedback.
+- **Retraction filter is heuristic**: the normalization layer catches the most common false-positive patterns observed in production, but a REQUEST CHANGES review should still be read by a human before acting on it. The filter errs on the side of approving ambiguous cases.
+- **Not a replacement for human review on high-stakes changes**: ideal for catching typos, stale values, wrong facts, and obvious inconsistencies. For complex architectural decisions, security-sensitive changes, or business logic, human review remains essential.
+
 ---
 
 ## PR Checks
@@ -203,6 +212,86 @@ No secrets required.
 
 Note: `pr-checks.yml`'s "PR body" check no longer fails on AI-attribution phrases (see below) —
 that's what makes scanning the PR body here safe and useful instead of adversarial.
+
+---
+
+## Index Notify
+
+**File:** `.github/workflows/index-notify.yml`
+
+Submits URLs to the [Google Indexing API](https://developers.google.com/search/apis/indexing-api/v3/quickstart) and [IndexNow](https://www.indexnow.org/) (Bing, Yandex) after a deploy, replacing the manual "Request Indexing" button in Google Search Console.
+
+Both submit steps use `continue-on-error: true`, so indexing failures never block a deploy.
+
+### Usage
+
+Expose detected URLs as a job output in your deploy workflow, then call this workflow as a second job:
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      urls: ${{ steps.detect-urls.outputs.urls }}
+      deleted_urls: ${{ steps.detect-deleted.outputs.deleted_urls }}
+    steps:
+      # ... your deploy steps ...
+      - name: Detect changed pages
+        id: detect-urls
+        run: |
+          echo "urls=https://example.com/ https://example.com/faq" >> "$GITHUB_OUTPUT"
+      - name: Detect deleted pages
+        id: detect-deleted
+        run: |
+          echo "deleted_urls=https://example.com/old-page" >> "$GITHUB_OUTPUT"
+
+  index-notify:
+    needs: deploy
+    if: needs.deploy.outputs.urls != '' || needs.deploy.outputs.deleted_urls != ''
+    uses: YOUR_ORG/YOUR_WORKFLOWS_REPO/.github/workflows/index-notify.yml@main
+    with:
+      urls: ${{ needs.deploy.outputs.urls }}
+      deleted_urls: ${{ needs.deploy.outputs.deleted_urls }}
+    secrets:
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      GOOGLE_INDEXING_REFRESH_TOKEN: ${{ secrets.GOOGLE_INDEXING_REFRESH_TOKEN }}
+      INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+```
+
+For emergency manual submission without a full deploy, trigger via the GitHub Actions UI with explicit URLs.
+
+### Inputs
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `urls` | No | `''` | Space-separated URLs to submit as updated (e.g. `https://example.com/ https://example.com/faq`) |
+| `deleted_urls` | No | `''` | Space-separated URLs that have been removed; submitted as `URL_DELETED` to Google Indexing API (IndexNow has no deletion concept) |
+
+### Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `GOOGLE_OAUTH_CLIENT_ID` | OAuth client ID (GCP project with Web Search Indexing API enabled) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret from the same GCP project |
+| `GOOGLE_INDEXING_REFRESH_TOKEN` | Long-lived refresh token from OAuth Playground, authorized as GSC property owner |
+| `INDEXNOW_KEY` | IndexNow key string (must match the key file served at `https://{host}/{key}.txt`) |
+
+### Setup
+
+1. **GCP project**: enable the *Web Search Indexing API*. Create an OAuth 2.0 client (Web application type) with `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+
+2. **Refresh token**: go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/), click the settings gear, enable "Use your own OAuth credentials", enter your client ID and secret. Authorize scope `https://www.googleapis.com/auth/indexing` using the Google account that owns the GSC property. Exchange the authorization code and copy the refresh token. Add all four values as repository secrets.
+
+3. **GSC ownership**: the Google account used in step 2 must be a verified owner of the property in Google Search Console. Service accounts cannot be granted GSC ownership via the UI.
+
+4. **IndexNow key file**: serve a plain-text file at `https://{your-host}/{INDEXNOW_KEY}.txt` containing only the key string. This lets IndexNow verify site ownership.
+
+### Notes
+
+- Google Indexing API is officially documented for `JobPosting`/`BroadcastEvent` schema types but works for general pages. If Google stops accepting submissions, IndexNow continues to cover Bing and Yandex, and Google crawls the sitemap naturally.
+- The `host` for the IndexNow payload is derived from the first URL in the list.
+- `GOOGLE_INDEXING_REFRESH_TOKEN` is tied to the authorizing Google account. If that account loses GSC ownership or the token is revoked, re-authorize via OAuth Playground.
 
 ---
 
@@ -404,83 +493,62 @@ The calling repo must have `scripts/site-test.mjs`, a Node.js script that tests 
 
 ---
 
-## Index Notify
+## Sync Markdown to Google Doc
 
-**File:** `.github/workflows/index-notify.yml`
+**File:** `.github/workflows/sync-md-to-gdoc.yml`
 
-Submits URLs to the [Google Indexing API](https://developers.google.com/search/apis/indexing-api/v3/quickstart) and [IndexNow](https://www.indexnow.org/) (Bing, Yandex) after a deploy, replacing the manual "Request Indexing" button in Google Search Console.
+Converts a Markdown file to DOCX via [Pandoc](https://pandoc.org/) and uploads it to an existing Google Doc, keeping the Doc in sync with your repo on every push.
 
-Both submit steps use `continue-on-error: true`, so indexing failures never block a deploy.
+Post-processing applied to the DOCX before upload:
+
+- Removes Word bookmarks
+- Inserts empty paragraphs between body elements to preserve blank lines
+- Makes tables full-width with black borders and consistent cell padding
+- Justifies all body paragraphs and zeroes out extra spacing
 
 ### Usage
 
-Expose detected URLs as a job output in your deploy workflow, then call this workflow as a second job:
-
 ```yaml
+# .github/workflows/sync-prd.yml
+on:
+  push:
+    paths:
+      - 'docs/prd.md'
+
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    outputs:
-      urls: ${{ steps.detect-urls.outputs.urls }}
-      deleted_urls: ${{ steps.detect-deleted.outputs.deleted_urls }}
-    steps:
-      # ... your deploy steps ...
-      - name: Detect changed pages
-        id: detect-urls
-        run: |
-          echo "urls=https://example.com/ https://example.com/faq" >> "$GITHUB_OUTPUT"
-      - name: Detect deleted pages
-        id: detect-deleted
-        run: |
-          echo "deleted_urls=https://example.com/old-page" >> "$GITHUB_OUTPUT"
-
-  index-notify:
-    needs: deploy
-    if: needs.deploy.outputs.urls != '' || needs.deploy.outputs.deleted_urls != ''
-    uses: YOUR_ORG/YOUR_WORKFLOWS_REPO/.github/workflows/index-notify.yml@main
+  sync:
+    uses: doublewolfconsulting/workflows/.github/workflows/sync-md-to-gdoc.yml@main
     with:
-      urls: ${{ needs.deploy.outputs.urls }}
-      deleted_urls: ${{ needs.deploy.outputs.deleted_urls }}
+      md_file: docs/prd.md
+      reference_doc: docs/template.docx  # optional
+      google_doc_id: "YOUR_GOOGLE_DOC_ID"
     secrets:
-      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      GOOGLE_INDEXING_REFRESH_TOKEN: ${{ secrets.GOOGLE_INDEXING_REFRESH_TOKEN }}
-      INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+      WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+      SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
 ```
-
-For emergency manual submission without a full deploy, trigger via the GitHub Actions UI with explicit URLs.
 
 ### Inputs
 
-| Input | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `urls` | No | `''` | Space-separated URLs to submit as updated (e.g. `https://example.com/ https://example.com/faq`) |
-| `deleted_urls` | No | `''` | Space-separated URLs that have been removed; submitted as `URL_DELETED` to Google Indexing API (IndexNow has no deletion concept) |
+| Input | Required | Description |
+|-------|----------|-------------|
+| `md_file` | Yes | Path to the Markdown file in your repo (e.g. `docs/prd.md`) |
+| `reference_doc` | No | Path to a `.docx` template for Pandoc styling |
+| `google_doc_id` | Yes | The file ID from the Google Doc URL |
 
 ### Secrets
 
 | Secret | Description |
 |--------|-------------|
-| `GOOGLE_OAUTH_CLIENT_ID` | OAuth client ID (GCP project with Web Search Indexing API enabled) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth client secret from the same GCP project |
-| `GOOGLE_INDEXING_REFRESH_TOKEN` | Long-lived refresh token from OAuth Playground, authorized as GSC property owner |
-| `INDEXNOW_KEY` | IndexNow key string (must match the key file served at `https://{host}/{key}.txt`) |
+| `WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Federation provider resource name |
+| `SERVICE_ACCOUNT_EMAIL` | Google service account email |
 
 ### Setup
 
-1. **GCP project**: enable the *Web Search Indexing API*. Create an OAuth 2.0 client (Web application type) with `https://developers.google.com/oauthplayground` as an authorized redirect URI.
+1. **Google Doc**: create the Doc and share it with the service account (Editor). Copy the file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`) and pass it as the `google_doc_id` input directly in your workflow file. No secret needed.
 
-2. **Refresh token**: go to [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/), click the settings gear, enable "Use your own OAuth credentials", enter your client ID and secret. Authorize scope `https://www.googleapis.com/auth/indexing` using the Google account that owns the GSC property. Exchange the authorization code and copy the refresh token. Add all four values as repository secrets.
+2. **Google Cloud service account**: create a service account in Google Cloud and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
 
-3. **GSC ownership**: the Google account used in step 2 must be a verified owner of the property in Google Search Console. Service accounts cannot be granted GSC ownership via the UI.
-
-4. **IndexNow key file**: serve a plain-text file at `https://{your-host}/{INDEXNOW_KEY}.txt` containing only the key string. This lets IndexNow verify site ownership.
-
-### Notes
-
-- Google Indexing API is officially documented for `JobPosting`/`BroadcastEvent` schema types but works for general pages. If Google stops accepting submissions, IndexNow continues to cover Bing and Yandex, and Google crawls the sitemap naturally.
-- The `host` for the IndexNow payload is derived from the first URL in the list.
-- `GOOGLE_INDEXING_REFRESH_TOKEN` is tied to the authorizing Google account. If that account loses GSC ownership or the token is revoked, re-authorize via OAuth Playground.
+3. **Permissions**: the calling workflow needs `id-token: write` and `contents: read`. These are set automatically by this workflow, but your repo's Actions settings must allow it.
 
 ---
 
@@ -548,62 +616,3 @@ Claude is instructed to focus only on shared infrastructure (build pipeline, tes
 1. Add `ANTHROPIC_API_KEY` as a secret in the client repo.
 2. Ensure the client repo's Actions settings allow creating PRs: **Settings > Actions > General > Workflow permissions > Allow GitHub Actions to create and approve pull requests**.
 3. Add the caller workflow file above. The workflow runs on the schedule defined in the caller (quarterly recommended) and can also be triggered manually via the GitHub Actions UI.
-
----
-
-## Sync Markdown to Google Doc
-
-**File:** `.github/workflows/sync-md-to-gdoc.yml`
-
-Converts a Markdown file to DOCX via [Pandoc](https://pandoc.org/) and uploads it to an existing Google Doc, keeping the Doc in sync with your repo on every push.
-
-Post-processing applied to the DOCX before upload:
-
-- Removes Word bookmarks
-- Inserts empty paragraphs between body elements to preserve blank lines
-- Makes tables full-width with black borders and consistent cell padding
-- Justifies all body paragraphs and zeroes out extra spacing
-
-### Usage
-
-```yaml
-# .github/workflows/sync-prd.yml
-on:
-  push:
-    paths:
-      - 'docs/prd.md'
-
-jobs:
-  sync:
-    uses: doublewolfconsulting/workflows/.github/workflows/sync-md-to-gdoc.yml@main
-    with:
-      md_file: docs/prd.md
-      reference_doc: docs/template.docx  # optional
-      google_doc_id: "YOUR_GOOGLE_DOC_ID"
-    secrets:
-      WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
-      SERVICE_ACCOUNT_EMAIL: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
-```
-
-### Inputs
-
-| Input | Required | Description |
-|-------|----------|-------------|
-| `md_file` | Yes | Path to the Markdown file in your repo (e.g. `docs/prd.md`) |
-| `reference_doc` | No | Path to a `.docx` template for Pandoc styling |
-| `google_doc_id` | Yes | The file ID from the Google Doc URL |
-
-### Secrets
-
-| Secret | Description |
-|--------|-------------|
-| `WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Federation provider resource name |
-| `SERVICE_ACCOUNT_EMAIL` | Google service account email |
-
-### Setup
-
-1. **Google Doc**: create the Doc and share it with the service account (Editor). Copy the file ID from the URL (`https://docs.google.com/document/d/<FILE_ID>/edit`) and pass it as the `google_doc_id` input directly in your workflow file. No secret needed.
-
-2. **Google Cloud service account**: create a service account in Google Cloud and configure [Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation) for GitHub Actions. Add the provider resource name as `WORKLOAD_IDENTITY_PROVIDER` and the service account email as `SERVICE_ACCOUNT_EMAIL`.
-
-3. **Permissions**: the calling workflow needs `id-token: write` and `contents: read`. These are set automatically by this workflow, but your repo's Actions settings must allow it.
