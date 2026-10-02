@@ -22,7 +22,43 @@ None.
 
 ## Recently completed
 
-### psi-monitor: multi-page, all categories, per-category thresholds, job summary (2026-08-09, PR pending)
+### pr-review: AWS Bedrock mode (2026-10-02)
+
+Added `USE_BEDROCK` mode to `scripts/pr-review.mjs` so PR review can run via AWS Bedrock
+instead of the Anthropic API direct (no credits consumed). When `USE_BEDROCK=true`, the
+script writes the request to a temp file and calls `aws bedrock-runtime invoke-model` via
+`execSync`. The AWS CLI is pre-installed on GitHub Actions runners; no new npm deps needed.
+Bedrock response format is identical to the direct API, so all downstream JSON parsing is
+unchanged.
+
+`auto-review.yml` gains three new inputs (`aws_role_arn`, `bedrock_region`,
+`bedrock_model_id`) and a conditional `aws-actions/configure-aws-credentials@v4` step.
+`ANTHROPIC_API_KEY` is now `required: false` — existing callers (DW static, Mash) that
+still pass the key are unaffected. Model default: `anthropic.claude-sonnet-4-6`.
+
+## Recently completed
+
+### psi-monitor: accessibility audit detail in extractLighthouseDetail (2026-08-09, PR #84)
+
+`extractLighthouseDetail()` previously only captured performance-related Lighthouse audits (opportunities, diagnostics, LCP, CLS). When accessibility thresholds failed, Claude received only the failing score with no element-level context — making confident diagnosis and patch generation impossible.
+
+Added a new accessibility section showing audits with score < 1:
+- `color-contrast` — with `contrastRatio` and `thresholdRatio` per failing element
+- `image-alt`, `label`, `heading-order`, `link-name`, `button-name`, `aria-hidden-body`, `duplicate-id-active`
+
+Up to 5 failing elements shown per audit with HTML snippets. Zero output when all pass.
+
+Motivation: Mash issue #268 (A96/95 on two posts) — auto-diagnosis had no element detail, so Claude gave low-confidence generic output. With this fix, the contrast ratio and failing element snippet would be included, enabling a precise patch.
+
+### psi-monitor: fix missing &category= params (2026-08-09, PR #82)
+
+PSI API without explicit `&category=` parameters only returns performance data by default — accessibility, best-practices, and SEO were silently dropped, showing as N/A in the monitor output. Added all four category params to the fetch URL: `&category=performance&category=accessibility&category=best-practices&category=seo`.
+
+### workflows README reorder + PR Review known limitations (2026-08-09, PR #83)
+
+Reordered README sections by generality (generic workflows first, DW-specific last). Added a "Known limitations" section to PR Review documenting: diff-only context, no code execution, `additional_context` as key lever, large PR degradation, heuristic retraction filter, not a replacement for human review on high-stakes changes.
+
+### psi-monitor: multi-page, all categories, per-category thresholds, job summary (2026-08-09, PR #81)
 
 - **Multi-page**: new `pages` input (JSON array); callers derive it from `cfg.pages` in a
   `generate-config` pre-job alongside `schema_config`. Adding a page to `cfg.pages` automatically

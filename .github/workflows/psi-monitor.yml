@@ -69,9 +69,23 @@ on:
         required: false
         type: number
         default: 0
+      aws_role_arn:
+        description: >
+          IAM role ARN for Bedrock auth. When set, uses AWS Bedrock instead of
+          ANTHROPIC_API_KEY (no credits consumed). If unset, ANTHROPIC_API_KEY is used.
+        type: string
+        default: ''
+      bedrock_region:
+        description: AWS region for the Bedrock API call.
+        type: string
+        default: 'us-east-1'
+      bedrock_model_id:
+        description: Bedrock foundation model ID.
+        type: string
+        default: 'anthropic.claude-sonnet-4-6'
     secrets:
       ANTHROPIC_API_KEY:
-        required: true
+        required: false
       GOOGLE_PSI_API_KEY:
         required: true
 
@@ -79,6 +93,7 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 jobs:
   monitor:
@@ -123,11 +138,21 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
 
+      - name: Configure AWS credentials (Bedrock)
+        if: inputs.aws_role_arn != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.bedrock_region }}
+
       - name: Run PSI monitor
         run: node _wf/scripts/psi-monitor.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          USE_BEDROCK: ${{ inputs.aws_role_arn != '' }}
+          BEDROCK_REGION: ${{ inputs.bedrock_region }}
+          BEDROCK_MODEL_ID: ${{ inputs.bedrock_model_id }}
           GOOGLE_PSI_API_KEY: ${{ secrets.GOOGLE_PSI_API_KEY }}
           SITE_URL: ${{ inputs.site_url }}
           MOBILE_THRESHOLD: ${{ inputs.mobile_threshold }}

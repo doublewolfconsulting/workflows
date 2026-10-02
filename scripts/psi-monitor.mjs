@@ -36,8 +36,9 @@
  *                          e.g. {"https://example.com/":["Organization","WebSite","WebPage"]}
  */
 
-import { readFileSync, writeFileSync, appendFileSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
+import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
 import { chromium } from 'playwright';
@@ -84,6 +85,9 @@ const today = new Date().toISOString().split('T')[0];
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const USE_BEDROCK = process.env.USE_BEDROCK === 'true';
+const BEDROCK_REGION = process.env.BEDROCK_REGION || 'us-east-1';
+const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-sonnet-4-6';
 const GOOGLE_PSI_API_KEY = process.env.GOOGLE_PSI_API_KEY;
 const [OWNER, REPO] = (process.env.GITHUB_REPOSITORY || '').split('/');
 
@@ -655,26 +659,52 @@ async function diagnose(failingResults, siteAudit, schemaFailures) {
     'Be concise. The diagnosis (Root Cause + Fix + Confidence) goes into a GitHub issue.'
   );
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+  let text;
+  if (USE_BEDROCK) {
+    const bedrockPayload = JSON.stringify({
+      anthropic_version: 'bedrock-2023-05-31',
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt.join('\n') }],
-    }),
-  });
+    });
+    const reqFile = join(tmpdir(), 'psi-bedrock-req-' + Date.now() + '.json');
+    const resFile = join(tmpdir(), 'psi-bedrock-res-' + Date.now() + '.json');
+    writeFileSync(reqFile, bedrockPayload, 'utf8');
+    try {
+      execSync(
+        'aws bedrock-runtime invoke-model --model-id "' + BEDROCK_MODEL_ID + '" --region "' + BEDROCK_REGION + '" --content-type application/json --accept application/json --body "file://' + reqFile + '" "' + resFile + '"',
+        { stdio: 'inherit' }
+      );
+      const bedrockData = JSON.parse(readFileSync(resFile, 'utf8'));
+      text = bedrockData.content[0].text;
+    } catch (err) {
+      console.error('Bedrock invoke-model error: ' + err.message);
+      return null;
+    } finally {
+      try { unlinkSync(reqFile); } catch {}
+      try { unlinkSync(resFile); } catch {}
+    }
+  } else {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        messages: [{ role: 'user', content: prompt.join('\n') }],
+      }),
+    });
 
-  if (!res.ok) {
-    console.error('Anthropic API error: ' + await res.text());
-    return null;
+    if (!res.ok) {
+      console.error('Anthropic API error: ' + await res.text());
+      return null;
+    }
+    const data = await res.json();
+    text = data.content[0].text;
   }
-  const data = await res.json();
-  const text = data.content[0].text;
 
   // Split diagnosis (for issue) from patch (for PR)
   const patchSplit = text.split(/^## Patch/m);
@@ -1085,9 +1115,9 @@ async function main() {
   const psiErrorResults = pageResults.filter(function(r) { return r.psiError; });
   console.log('Issues confirmed. Calling Claude for diagnosis...');
 
-  let diagnosis = '(No ANTHROPIC_API_KEY set, diagnosis skipped)';
+  let diagnosis = '(No ANTHROPIC_API_KEY or Bedrock role set, diagnosis skipped)';
   let patch = null;
-  if (ANTHROPIC_API_KEY) {
+  if (ANTHROPIC_API_KEY || USE_BEDROCK) {
     const result = await diagnose(failingResults, siteAudit, schemaFailures);
     if (result) {
       diagnosis = result.diagnosis;
