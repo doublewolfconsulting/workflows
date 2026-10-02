@@ -54,7 +54,7 @@ on:
       bedrock_model_id:
         description: Bedrock foundation model ID.
         type: string
-        default: 'anthropic.claude-sonnet-4-6'
+        default: 'us.anthropic.claude-sonnet-4-6'
     secrets:
       ANTHROPIC_API_KEY:
         description: Anthropic API key. Required when aws_role_arn is not set.

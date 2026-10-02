@@ -24,7 +24,7 @@ for (const v of required) {
 
 const {
   ANTHROPIC_API_KEY, PR_NUMBER, PR_TITLE, HEAD_REF, BASE_REF, ADDITIONAL_CONTEXT = '',
-  USE_BEDROCK, BEDROCK_REGION = 'us-east-1', BEDROCK_MODEL_ID = 'anthropic.claude-sonnet-4-6',
+  USE_BEDROCK, BEDROCK_REGION = 'us-east-1', BEDROCK_MODEL_ID = 'us.anthropic.claude-sonnet-4-6',
 } = process.env;
 
 if (USE_BEDROCK !== 'true' && !ANTHROPIC_API_KEY) {

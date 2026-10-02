@@ -87,7 +87,7 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const USE_BEDROCK = process.env.USE_BEDROCK === 'true';
 const BEDROCK_REGION = process.env.BEDROCK_REGION || 'us-east-1';
-const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-sonnet-4-6';
+const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-4-6';
 const GOOGLE_PSI_API_KEY = process.env.GOOGLE_PSI_API_KEY;
 const [OWNER, REPO] = (process.env.GITHUB_REPOSITORY || '').split('/');
 
