@@ -23,8 +23,9 @@
  *                           instead of PRs in the template repo.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, unlinkSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, dirname, resolve } from 'path';
+import { tmpdir } from 'os';
 import { execSync } from 'child_process';
 
 const ANTHROPIC_API_KEY   = process.env.ANTHROPIC_API_KEY;
@@ -615,6 +616,36 @@ async function executeTool(name, input) {
 // --- Claude API call ---------------------------------------------------------
 
 async function callClaude(messages, toolDefs, systemPrompt) {
+  const USE_BEDROCK = process.env.USE_BEDROCK === 'true';
+  const BEDROCK_REGION = process.env.BEDROCK_REGION || 'us-east-1';
+  const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-sonnet-4-6';
+
+  if (USE_BEDROCK) {
+    const payload = JSON.stringify({
+      anthropic_version: 'bedrock-2023-05-31',
+      max_tokens: 16000,
+      // Bedrock does not support cache_control or anthropic-beta prompt-caching header.
+      // Pass system as a plain string — the caching optimisation is skipped in Bedrock mode.
+      system: systemPrompt,
+      tools: toolDefs,
+      messages,
+    });
+    const ts = Date.now();
+    const reqFile = join(tmpdir(), 'ts-bedrock-req-' + ts + '.json');
+    const resFile = join(tmpdir(), 'ts-bedrock-res-' + ts + '.json');
+    writeFileSync(reqFile, payload, 'utf8');
+    try {
+      execSync(
+        'aws bedrock-runtime invoke-model --model-id "' + BEDROCK_MODEL_ID + '" --region "' + BEDROCK_REGION + '" --content-type application/json --accept application/json --body "file://' + reqFile + '" "' + resFile + '"',
+        { stdio: 'inherit' }
+      );
+      return JSON.parse(readFileSync(resFile, 'utf8'));
+    } finally {
+      try { unlinkSync(reqFile); } catch {}
+      try { unlinkSync(resFile); } catch {}
+    }
+  }
+
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -837,8 +868,8 @@ async function main() {
   console.log('TEMPLATE_WRITE_TOKEN: ' + (process.env.TEMPLATE_WRITE_TOKEN ? 'set' : 'not set (template PRs will fall back to issues)'));
   console.log('');
 
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is required for agentic template sync');
+  if (!ANTHROPIC_API_KEY && process.env.USE_BEDROCK !== 'true') {
+    throw new Error('ANTHROPIC_API_KEY is required when USE_BEDROCK is not true');
   }
 
   await runSyncAgent();

@@ -23,6 +23,9 @@ name: PR Review (Reusable)
 #       with:
 #         additional_context: |
 #           Repo-specific facts...
+#         # Bedrock (preferred — no Anthropic credits consumed):
+#         aws_role_arn: ${{ vars.AWS_BEDROCK_ROLE_ARN_STAGING }}
+#         # Direct API (fallback):
 #       secrets:
 #         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -36,10 +39,26 @@ on:
           (no repo files are read — single API call, predictable cost).
         type: string
         default: ''
+      aws_role_arn:
+        description: >
+          IAM role ARN for Bedrock auth. When set, uses AWS Bedrock instead of
+          the Anthropic API (no credits consumed). The role must have
+          bedrock:InvokeModel on the target foundation model. If unset,
+          ANTHROPIC_API_KEY is required.
+        type: string
+        default: ''
+      bedrock_region:
+        description: AWS region for the Bedrock API call (foundation model must be available there).
+        type: string
+        default: 'us-east-1'
+      bedrock_model_id:
+        description: Bedrock foundation model ID.
+        type: string
+        default: 'anthropic.claude-sonnet-4-6'
     secrets:
       ANTHROPIC_API_KEY:
-        description: Anthropic API key (same key used by PSI monitor and template sync)
-        required: true
+        description: Anthropic API key. Required when aws_role_arn is not set.
+        required: false
 
 jobs:
   review:
@@ -68,9 +87,19 @@ jobs:
         run: npm ci
         working-directory: _wf
 
+      - name: Configure AWS credentials (Bedrock)
+        if: inputs.aws_role_arn != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.aws_role_arn }}
+          aws-region: ${{ inputs.bedrock_region }}
+
       - name: Run PR review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          USE_BEDROCK: ${{ inputs.aws_role_arn != '' }}
+          BEDROCK_REGION: ${{ inputs.bedrock_region }}
+          BEDROCK_MODEL_ID: ${{ inputs.bedrock_model_id }}
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}

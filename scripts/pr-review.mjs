@@ -13,16 +13,24 @@
  */
 
 import { execSync } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
+import { writeFileSync, unlinkSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const required = ['ANTHROPIC_API_KEY', 'PR_NUMBER', 'PR_TITLE', 'HEAD_REF', 'BASE_REF'];
+const required = ['PR_NUMBER', 'PR_TITLE', 'HEAD_REF', 'BASE_REF'];
 for (const v of required) {
   if (!process.env[v]) { console.error(`Missing env var: ${v}`); process.exit(1); }
 }
 
-const { ANTHROPIC_API_KEY, PR_NUMBER, PR_TITLE, HEAD_REF, BASE_REF, ADDITIONAL_CONTEXT = '' } = process.env;
+const {
+  ANTHROPIC_API_KEY, PR_NUMBER, PR_TITLE, HEAD_REF, BASE_REF, ADDITIONAL_CONTEXT = '',
+  USE_BEDROCK, BEDROCK_REGION = 'us-east-1', BEDROCK_MODEL_ID = 'anthropic.claude-sonnet-4-6',
+} = process.env;
+
+if (USE_BEDROCK !== 'true' && !ANTHROPIC_API_KEY) {
+  console.error('Missing env var: ANTHROPIC_API_KEY (required when USE_BEDROCK is not true)');
+  process.exit(1);
+}
 
 console.log(`Reviewing PR #${PR_NUMBER}: ${PR_TITLE}`);
 
@@ -74,28 +82,54 @@ OUTPUT RULES — these are strict:
 - The diff shows only what changed in this PR — facts already present in the file from prior commits are NOT in the diff but are still present in the final file state. Do not flag "missing" content unless you can confirm it was removed in this diff.
 - prohibited_patterns in pr-checks.yml use grep -iE (case-insensitive) and are scoped to docs/ files only (doc_path_filter default). CLAUDE.md and root files are never scanned. Unqualified patterns for invented field names are intentional — any mention in docs/ is suspicious by design.`;
 
-const res = await fetch('https://api.anthropic.com/v1/messages', {
-  method: 'POST',
-  headers: {
-    'x-api-key': ANTHROPIC_API_KEY,
-    'anthropic-version': '2023-06-01',
-    'content-type': 'application/json',
-  },
-  body: JSON.stringify({
-    model: 'claude-sonnet-4-6',
+let text;
+if (USE_BEDROCK === 'true') {
+  const bedrockPayload = JSON.stringify({
+    anthropic_version: 'bedrock-2023-05-31',
     max_tokens: 4096,
     messages: [{ role: 'user', content: prompt }],
-  }),
-});
+  });
+  const reqFile = join(tmpdir(), `bedrock-req-${PR_NUMBER}.json`);
+  const resFile = join(tmpdir(), `bedrock-res-${PR_NUMBER}.json`);
+  writeFileSync(reqFile, bedrockPayload, 'utf8');
+  try {
+    execSync(
+      `aws bedrock-runtime invoke-model --model-id "${BEDROCK_MODEL_ID}" --region "${BEDROCK_REGION}" --content-type application/json --accept application/json --body "file://${reqFile}" "${resFile}"`,
+      { stdio: 'inherit' }
+    );
+    const bedrockData = JSON.parse(readFileSync(resFile, 'utf8'));
+    text = bedrockData.content[0].text.trim();
+  } catch (err) {
+    console.error('Bedrock invoke-model error:', err.message);
+    process.exit(1);
+  } finally {
+    try { unlinkSync(reqFile); } catch {}
+    try { unlinkSync(resFile); } catch {}
+  }
+} else {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
 
-if (!res.ok) {
-  const err = await res.text();
-  console.error('Anthropic API error:', res.status, err);
-  process.exit(1);
+  if (!res.ok) {
+    const err = await res.text();
+    console.error('Anthropic API error:', res.status, err);
+    process.exit(1);
+  }
+
+  const data = await res.json();
+  text = data.content[0].text.trim();
 }
-
-const data = await res.json();
-const text = data.content[0].text.trim();
 
 // Parse JSON — try direct parse first, then extract the first {...} block as fallback
 function extractJson(str) {
