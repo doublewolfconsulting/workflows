@@ -22,21 +22,34 @@ None.
 
 ## Recently completed
 
-### pr-review: AWS Bedrock mode (2026-10-02)
+### All AI scripts: Bedrock production-ready (2026-10-02, PRs #86–88)
 
-Added `USE_BEDROCK` mode to `scripts/pr-review.mjs` so PR review can run via AWS Bedrock
-instead of the Anthropic API direct (no credits consumed). When `USE_BEDROCK=true`, the
-script writes the request to a temp file and calls `aws bedrock-runtime invoke-model` via
-`execSync`. The AWS CLI is pre-installed on GitHub Actions runners; no new npm deps needed.
-Bedrock response format is identical to the direct API, so all downstream JSON parsing is
-unchanged.
+All three AI scripts (`pr-review.mjs`, `psi-monitor.mjs`, `template-sync.mjs`) and their
+reusable workflows now support AWS Bedrock via OIDC. Three PRs were required to get it
+fully working:
 
-`auto-review.yml` gains three new inputs (`aws_role_arn`, `bedrock_region`,
-`bedrock_model_id`) and a conditional `aws-actions/configure-aws-credentials@v4` step.
-`ANTHROPIC_API_KEY` is now `required: false` — existing callers (DW static, Mash) that
-still pass the key are unaffected. Model default: `anthropic.claude-sonnet-4-6`.
+**PR #86** — Core Bedrock switch: `USE_BEDROCK=true` env var, temp-file invoke via
+`aws bedrock-runtime invoke-model`, conditional `configure-aws-credentials@v4` step in
+all three workflows, `ANTHROPIC_API_KEY` now `required: false`. `template-sync` strips
+`anthropic-beta` header and `cache_control` in Bedrock mode (not supported on Bedrock).
 
-## Recently completed
+**PR #87** — `file://` → `fileb://`: AWS CLI `file://` treats body as ASCII text and
+errors on any non-ASCII characters in the diff content (em dashes, Unicode, etc.).
+`fileb://` reads as binary. Fix applied to all three scripts.
+
+**PR #88** — Inference profile model ID: Claude 4.x models require an inference profile;
+direct invocation of `anthropic.claude-sonnet-4-6` returns `ValidationException`.
+Corrected default to **`us.anthropic.claude-sonnet-4-6`** in all three scripts and
+workflow `bedrock_model_id` input defaults.
+
+IAM policy for the OIDC role also required two fixes (applied directly to Terraform):
+- Two ARN formats needed: foundation model (`arn:aws:bedrock:*::foundation-model/...`)
+  AND inference profile (`arn:aws:bedrock:*:ACCOUNT:inference-profile/us.anthropic...`)
+- Wildcard region is mandatory — cross-region inference profiles route to whichever US
+  region has capacity (us-east-1, us-east-2, us-west-2, etc.)
+
+**Caller setup**: `id-token: write` permission + `aws_role_arn: ${{ vars.AWS_BEDROCK_ROLE_ARN_STAGING }}` in the `with:` block. All three caller repos (boreas, mash, dw-static) have the variable set to `arn:aws:iam::345804339234:role/staging-boreas-ci-pr-review`.
+
 
 ### psi-monitor: accessibility audit detail in extractLighthouseDetail (2026-08-09, PR #84)
 
@@ -77,7 +90,6 @@ Reordered README sections by generality (generic workflows first, DW-specific la
 - **Issue body**: per-page × per-category table format; columns only shown for checked categories.
 - **Claude prompt**: LH detail sent only for failing pages — token cost proportional to failures.
 
-## Recently completed
 
 ### pr-review: per-line ✅/❌ indicators instead of blanket-per-decision (2026-07-24)
 
@@ -216,7 +228,6 @@ No secrets or external services required.
 - IndexNow has no deletion concept — deleted URLs only go to Google Indexing API
 - Updated README.md inputs table to document `deleted_urls`
 
-## Recently completed
 
 ### Template sync workflow upgrades (feat/template-sync-workflow, 2026-06-27)
 
