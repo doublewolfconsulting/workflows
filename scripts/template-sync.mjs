@@ -618,7 +618,7 @@ async function executeTool(name, input) {
 async function callClaude(messages, toolDefs, systemPrompt) {
   const USE_BEDROCK = process.env.USE_BEDROCK === 'true';
   const BEDROCK_REGION = process.env.BEDROCK_REGION || 'us-east-1';
-  const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-sonnet-4-6';
+  const BEDROCK_MODEL_ID = process.env.BEDROCK_MODEL_ID || 'us.anthropic.claude-sonnet-4-6';
 
   if (USE_BEDROCK) {
     const payload = JSON.stringify({
