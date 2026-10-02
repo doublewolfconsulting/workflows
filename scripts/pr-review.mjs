@@ -94,7 +94,7 @@ if (USE_BEDROCK === 'true') {
   writeFileSync(reqFile, bedrockPayload, 'utf8');
   try {
     execSync(
-      `aws bedrock-runtime invoke-model --model-id "${BEDROCK_MODEL_ID}" --region "${BEDROCK_REGION}" --content-type application/json --accept application/json --body "file://${reqFile}" "${resFile}"`,
+      `aws bedrock-runtime invoke-model --model-id "${BEDROCK_MODEL_ID}" --region "${BEDROCK_REGION}" --content-type application/json --accept application/json --body "fileb://${reqFile}" "${resFile}"`,
       { stdio: 'inherit' }
     );
     const bedrockData = JSON.parse(readFileSync(resFile, 'utf8'));
