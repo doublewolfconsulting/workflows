@@ -89,7 +89,7 @@ jobs:
 
       - name: Configure AWS credentials (Bedrock)
         if: inputs.aws_role_arn != ''
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ${{ inputs.bedrock_region }}
