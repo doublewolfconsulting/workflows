@@ -22,6 +22,13 @@ None.
 
 ## Recently completed
 
+### sync-md-to-gdoc: pin Python 3.12 (2026-11-06)
+
+`ubuntu-latest` moved to Ubuntu 26.04 and its default Python has no `lxml==5.4.0` wheel, so every
+Markdown-to-Google-Doc sync failed at `pip install` (last green run before that: 31 May 2026).
+Added `actions/setup-python@v6` with Python 3.12 before the dependency install. Found when the
+new Mash AEO brief sync failed on its first run.
+
 ### All AI scripts: Bedrock production-ready (2026-10-02, PRs #86–88)
 
 All three AI scripts (`pr-review.mjs`, `psi-monitor.mjs`, `template-sync.mjs`) and their
