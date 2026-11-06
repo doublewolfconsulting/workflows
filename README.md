@@ -499,6 +499,8 @@ The calling repo must have `scripts/site-test.mjs`, a Node.js script that tests 
 
 Converts a Markdown file to DOCX via [Pandoc](https://pandoc.org/) and uploads it to an existing Google Doc, keeping the Doc in sync with your repo on every push.
 
+The job pins Python 3.12 (`actions/setup-python`). Without it, `ubuntu-latest` (Ubuntu 26.04, newer default Python) has no prebuilt `lxml==5.4.0` wheel and `pip install` fails building from source. If you bump `lxml`, check it has wheels for the pinned Python.
+
 Post-processing applied to the DOCX before upload:
 
 - Removes Word bookmarks

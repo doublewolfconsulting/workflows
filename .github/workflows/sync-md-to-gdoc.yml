@@ -63,6 +63,10 @@ jobs:
             pandoc "${{ inputs.md_file }}" --resource-path="$RESOURCE_PATH" --from markdown+pipe_tables -o output.docx
           fi
 
+      - uses: actions/setup-python@v6      # pinned: ubuntu-latest's newer default Python has no lxml 5.4.0 wheel
+        with:
+          python-version: '3.12'
+
       - name: Install Python dependencies
         run: pip install --quiet google-auth==2.40.0 google-api-python-client==2.166.0 lxml==5.4.0
 
