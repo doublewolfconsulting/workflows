@@ -131,11 +131,18 @@ if (USE_BEDROCK === 'true') {
   text = data.content[0].text.trim();
 }
 
-// Parse JSON — try direct parse first, then extract the first {...} block as fallback
+// Parse JSON — try direct parse first, then extract the last {"decision": ...} object,
+// then the first {...} block as a final fallback. The model sometimes reasons in prose
+// before the JSON, and that prose can contain braces (e.g. {nav_date}), so slicing from
+// the first "{" would start inside the prose and fail to parse.
 function extractJson(str) {
   try { return JSON.parse(str); } catch {}
-  const start = str.indexOf('{');
   const end = str.lastIndexOf('}');
+  const decisionStart = str.lastIndexOf('{"decision"');
+  if (decisionStart !== -1 && end > decisionStart) {
+    try { return JSON.parse(str.slice(decisionStart, end + 1)); } catch {}
+  }
+  const start = str.indexOf('{');
   if (start !== -1 && end > start) {
     try { return JSON.parse(str.slice(start, end + 1)); } catch {}
   }
