@@ -50,12 +50,16 @@ on:
         type: string
         default: ""
 
+# One job, not three: GitHub bills every job rounded up to a whole minute, and
+# these checks take seconds each. Every step after the first runs with
+# `!cancelled()` so a failing step does not hide the others; the job still
+# fails if any step fails.
 jobs:
-  # ── 1. PR body ─────────────────────────────────────────────────────────────
-  pr-body:
-    name: PR body
+  checks:
+    name: PR checks
     runs-on: ubuntu-latest
     steps:
+      # ── 1. PR body ───────────────────────────────────────────────────────────
       - name: Validate PR body
         uses: actions/github-script@v9
         with:
@@ -77,12 +81,9 @@ jobs:
             if (errors.length > 0) core.setFailed('PR body validation failed:\n' + errors.map(e => `  • ${e}`).join('\n'));
             else core.info('PR body OK');
 
-  # ── 2. Branch naming ────────────────────────────────────────────────────────
-  branch-name:
-    name: Branch name
-    runs-on: ubuntu-latest
-    steps:
+      # ── 2. Branch naming ─────────────────────────────────────────────────────
       - name: Check branch naming convention
+        if: ${{ !cancelled() }}
         run: |
           BRANCH="${{ github.head_ref }}"
           case "$BRANCH" in
@@ -94,18 +95,15 @@ jobs:
           fi
           echo "Branch name OK: $BRANCH"
 
-  # ── 3. Doc consistency ──────────────────────────────────────────────────────
-  doc-consistency:
-    name: Doc consistency
-    runs-on: ubuntu-latest
-    if: inputs.prohibited_patterns != '' || inputs.required_patterns != ''
-    steps:
+      # ── 3. Doc consistency (skipped when both pattern inputs are empty) ──────
       - uses: actions/checkout@v7
+        if: ${{ !cancelled() && (inputs.prohibited_patterns != '' || inputs.required_patterns != '') }}
         with:
           fetch-depth: 0
 
       - name: Get changed docs files
         id: changed
+        if: ${{ !cancelled() && (inputs.prohibited_patterns != '' || inputs.required_patterns != '') }}
         run: |
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
             | grep "^${{ inputs.doc_path_filter }}" \
@@ -120,7 +118,7 @@ jobs:
           fi
 
       - name: Check prohibited patterns
-        if: steps.changed.outputs.skip == 'false' && inputs.prohibited_patterns != ''
+        if: ${{ !cancelled() && steps.changed.outputs.skip == 'false' && inputs.prohibited_patterns != '' }}
         env:
           PATTERNS: ${{ inputs.prohibited_patterns }}
         run: |
@@ -145,7 +143,7 @@ jobs:
           echo "Prohibited pattern checks passed."
 
       - name: Check required patterns
-        if: steps.changed.outputs.skip == 'false' && inputs.required_patterns != ''
+        if: ${{ !cancelled() && steps.changed.outputs.skip == 'false' && inputs.required_patterns != '' }}
         env:
           PATTERNS: ${{ inputs.required_patterns }}
         run: |

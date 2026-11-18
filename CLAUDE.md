@@ -8,6 +8,7 @@
   add new pending tasks with full spec.
 - Use squash merges via PR (never push directly to main).
 - Branch names: `claude/<short-description>`.
+- **Save Actions minutes.** GitHub bills every job rounded up to a whole minute. Commit locally and push once, open PRs as drafts (`gh pr create --draft`) and mark them ready (`gh pr ready <n>`) when complete, re-run failed jobs with `gh run rerun <run-id> --failed` (never an empty commit), and keep reusable workflows to as few jobs as possible. Private callers pay; this repo is public and does not.
 
 ## Current work
 

@@ -22,6 +22,10 @@ None.
 
 ## Recently completed
 
+### pr-checks: one job instead of three (2026-11-18)
+
+`pr-checks.yml` now runs a single job, `checks` (displayed as "PR checks"), with the PR body, branch name and doc consistency checks as steps. Reason: GitHub bills each job rounded up to a whole minute and the three checks take seconds each, so every push to a PR billed 3 minutes for about 20 seconds of work (a docs PR pushed 8 times in `boreas-website` cost an estimated 32 billed minutes together with the review job). Steps after the first use `!cancelled()` so all failures still show in one run. Inputs are unchanged, so callers need no change. Callers: `boreas-website` and this repo. The old job names ("PR body", "Branch name", "Doc consistency") no longer exist as status checks; no repo has them as required checks (branch protection is not available on the private repos). Standing rule added to `CLAUDE.md`: push once, draft PRs, rerun failed jobs only.
+
 ### sync-md-to-gdoc: pin Python 3.12 (2026-11-06)
 
 `ubuntu-latest` moved to Ubuntu 26.04 and its default Python has no `lxml==5.4.0` wheel, so every
@@ -215,7 +219,7 @@ Cost: ~$0.02–0.05 per review. Caller must include explicit `permissions:` bloc
 
 ### PR Checks reusable workflow (feat/pr-checks-v2, 2026-07-18)
 
-Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs:
+Added `.github/workflows/pr-checks.yml` — a reusable `workflow_call` workflow with three parallel jobs (merged into one job on 2026-11-18, see above):
 
 1. **PR body** (`pr-body`): validates required sections (configurable, default `## Summary,## Test plan`), minimum body length (50 chars), and absence of AI/Claude attribution phrases
 2. **Branch name** (`branch-name`): validates branch matches a configurable ERE pattern (default `^(feature|feat|fix|docs|chore|refactor|test|claude)/`); long-lived branches (`main`, `development`, `staging`) are always skipped
