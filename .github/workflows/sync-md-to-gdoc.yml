@@ -63,7 +63,7 @@ jobs:
             pandoc "${{ inputs.md_file }}" --resource-path="$RESOURCE_PATH" --from markdown+pipe_tables -o output.docx
           fi
 
-      - uses: actions/setup-python@v6      # pinned: ubuntu-latest's newer default Python has no lxml 5.4.0 wheel
+      - uses: actions/setup-python@v7      # pinned: ubuntu-latest's newer default Python has no lxml 5.4.0 wheel
         with:
           python-version: '3.12'
 
