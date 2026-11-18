@@ -98,7 +98,7 @@ These handle the model occasionally including an item, analysing it as non-block
 
 Runs on every PR against `main`. Validates PR hygiene and catches known doc consistency errors before review. No secrets or external services required.
 
-Three jobs run in parallel:
+One job (`PR checks`) runs three steps in order. GitHub bills every job rounded up to a whole minute and each step takes seconds, so a single job costs 1 minute per push instead of 3. A failing step does not hide the others: later steps still run and the job fails if any step fails.
 
 1. **PR body** — required sections present (configurable), minimum length
 2. **Branch name** — must match naming convention (configurable regex); long-lived branches (`main`, `development`, `staging`) are always allowed
@@ -150,7 +150,7 @@ s3://boreas-documents|||Wrong S3 bucket — use boreas-fund-data/documents/
 
 `PATTERN` is a case-insensitive `grep -E` expression matched against every changed file under `doc_path_filter`. Failures appear as GitHub error annotations at the file level, with up to 5 matching lines shown for prohibited patterns.
 
-`doc-consistency` job is skipped entirely when both `prohibited_patterns` and `required_patterns` are empty.
+The doc consistency steps (checkout included) are skipped entirely when both `prohibited_patterns` and `required_patterns` are empty.
 
 ### Setup
 
